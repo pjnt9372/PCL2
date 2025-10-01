@@ -38,17 +38,21 @@
                         CardName = "常规版本"
                     Case McVersionCardType.API
                         Dim IsForgeExists As Boolean = False
+                        Dim IsNeoForgeExists As Boolean = False
                         Dim IsFabricExists As Boolean = False
                         Dim IsLiteExists As Boolean = False
                         For Each Version As McVersion In Card.Value
                             If Version.Version.HasFabric Then IsFabricExists = True
                             If Version.Version.HasLiteLoader Then IsLiteExists = True
                             If Version.Version.HasForge Then IsForgeExists = True
+                            If Version.Version.HasNeoForge Then IsNeoForgeExists = True
                         Next
-                        If If(IsLiteExists, 1, 0) + If(IsForgeExists, 1, 0) + If(IsFabricExists, 1, 0) > 1 Then
+                        If If(IsLiteExists, 1, 0) + If(IsForgeExists, 1, 0) + If(IsFabricExists, 1, 0) + If(IsNeoForgeExists, 1, 0) > 1 Then
                             CardName = "可安装 Mod"
                         ElseIf IsForgeExists Then
                             CardName = "Forge 版本"
+                        ElseIf IsNeoForgeExists Then
+                            CardName = "NeoForge 版本"
                         ElseIf IsLiteExists Then
                             CardName = "LiteLoader 版本"
                         Else
@@ -77,15 +81,15 @@
                 PanMain.Children.Add(NewCard)
                 '确定卡片是否展开
                 If Card.Key = McVersionCardType.Rubbish OrElse Card.Key = McVersionCardType.Error OrElse Card.Key = McVersionCardType.Fool Then
-                    NewCard.IsSwaped = True
+                    NewCard.IsSwapped = True
                 Else
                     MyCard.StackInstall(NewStack, 0, CardTitle)
                 End If
             Next
 
             '若只有一个卡片，则强制展开
-            If PanMain.Children.Count = 1 AndAlso CType(PanMain.Children(0), MyCard).IsSwaped Then
-                CType(PanMain.Children(0), MyCard).IsSwaped = False
+            If PanMain.Children.Count = 1 AndAlso CType(PanMain.Children(0), MyCard).IsSwapped Then
+                CType(PanMain.Children(0), MyCard).IsSwapped = False
             End If
 
             '判断应该显示哪一个页面
@@ -163,14 +167,16 @@
             ToolTipService.SetPlacement(BtnCont, Primitives.PlacementMode.Center)
             ToolTipService.SetVerticalOffset(BtnCont, 30)
             ToolTipService.SetHorizontalOffset(BtnCont, 2)
-            AddHandler BtnCont.Click, Sub()
-                                          PageVersionLeft.Version = Version
-                                          FrmMain.PageChange(FormMain.PageType.VersionSetup, 0)
-                                      End Sub
-            AddHandler sender.MouseRightButtonUp, Sub()
-                                                      PageVersionLeft.Version = Version
-                                                      FrmMain.PageChange(FormMain.PageType.VersionSetup, 0)
-                                                  End Sub
+            AddHandler BtnCont.Click,
+            Sub()
+                PageVersionLeft.Version = Version
+                FrmMain.PageChange(FormMain.PageType.VersionSetup, 0)
+            End Sub
+            AddHandler sender.MouseRightButtonUp,
+            Sub()
+                PageVersionLeft.Version = Version
+                FrmMain.PageChange(FormMain.PageType.VersionSetup, 0)
+            End Sub
             sender.Buttons = {BtnStar, BtnDel, BtnCont}
         Else
             Dim BtnCont As New MyIconButton With {.LogoScale = 1.15, .Logo = Logo.IconButtonOpen}
@@ -178,12 +184,8 @@
             ToolTipService.SetPlacement(BtnCont, Primitives.PlacementMode.Center)
             ToolTipService.SetVerticalOffset(BtnCont, 30)
             ToolTipService.SetHorizontalOffset(BtnCont, 2)
-            AddHandler BtnCont.Click, Sub()
-                                          PageVersionOverall.OpenVersionFolder(Version)
-                                      End Sub
-            AddHandler sender.MouseRightButtonUp, Sub()
-                                                      PageVersionOverall.OpenVersionFolder(Version)
-                                                  End Sub
+            AddHandler BtnCont.Click, Sub() PageVersionOverall.OpenVersionFolder(Version)
+            AddHandler sender.MouseRightButtonUp, Sub() PageVersionOverall.OpenVersionFolder(Version)
             sender.Buttons = {BtnStar, BtnDel, BtnCont}
         End If
     End Sub
@@ -210,8 +212,8 @@
         FrmMain.PageChange(FormMain.PageType.Download, FormMain.PageSubType.DownloadInstall)
     End Sub
 
+    '修改此代码时，同时修改 PageVersionOverall 中的代码
     Public Shared Sub DeleteVersion(Item As MyListItem, Version As McVersion)
-        '修改此代码时，同时修改 PageVersionOverall 中的代码
         Try
             Dim IsShiftPressed As Boolean = My.Computer.Keyboard.ShiftKeyDown
             Dim IsHintIndie As Boolean = Version.State <> McVersionState.Error AndAlso Version.PathIndie <> PathMcFolder
@@ -219,16 +221,17 @@
                         If(IsHintIndie, vbCrLf & "由于该版本开启了版本隔离，删除版本时该版本对应的存档、资源包、Mod 等文件也将被一并删除！", ""),
                         "版本删除确认", , "取消",, True)
                 Case 1
+                    IniClearCache(Version.PathIndie & "options.txt")
                     IniClearCache(Version.Path & "PCL\Setup.ini")
                     If IsShiftPressed Then
                         DeleteDirectory(Version.Path)
                         Hint("版本 " & Version.Name & " 已永久删除！", HintType.Finish)
                     Else
-                        FileIO.FileSystem.DeleteDirectory(Version.Path, FileIO.UIOption.OnlyErrorDialogs, FileIO.RecycleOption.SendToRecycleBin)
+                        FileIO.FileSystem.DeleteDirectory(Version.Path, FileIO.UIOption.AllDialogs, FileIO.RecycleOption.SendToRecycleBin)
                         Hint("版本 " & Version.Name & " 已删除到回收站！", HintType.Finish)
                     End If
                 Case 2
-                    Exit Sub
+                    Return
             End Select
             '从 UI 中移除
             If Version.DisplayType = McVersionCardType.Hidden OrElse Not Version.IsStar Then

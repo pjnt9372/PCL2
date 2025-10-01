@@ -111,7 +111,16 @@
             If IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
 
                 If PanBack.Background Is Nothing Then PanBack.Background = New MyColor(0, 255, 255, 255)
-                If Path.Fill Is Nothing AndAlso Theme = Themes.Black Then Path.Fill = New MyColor(140, 0, 0, 0)
+                If Path.Fill Is Nothing Then
+                    Select Case Theme
+                        Case Themes.Red
+                            Path.Fill = New MyColor(160, 255, 76, 76)
+                        Case Themes.Black
+                            Path.Fill = New MyColor(160, 0, 0, 0)
+                        Case Themes.Custom
+                            Path.Fill = New MyColor(160, Foreground)
+                    End Select
+                End If
                 If IsMouseOver Then
                     '指向
                     Dim AnimList As New List(Of AniData)
@@ -177,7 +186,7 @@
 End Class
 Partial Public Module ModAnimation
     Public Sub AniDispose(Control As MyIconButton, RemoveFromChildren As Boolean, Optional CallBack As ParameterizedThreadStart = Nothing)
-        If Not Control.IsHitTestVisible Then Exit Sub
+        If Not Control.IsHitTestVisible Then Return
         Control.IsHitTestVisible = False
         AniStart({
                  AaScaleTransform(Control, -1.5, 200,, New AniEaseInFluent),

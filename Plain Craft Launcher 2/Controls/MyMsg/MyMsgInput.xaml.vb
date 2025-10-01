@@ -72,20 +72,21 @@
     End Sub
 
     Public Sub Btn1_Click() Handles Btn1.Click
-        If MyConverter.IsExited OrElse Not TextArea.ValidateResult = "" Then Exit Sub
+        TextArea.Validate() '#5773
+        If MyConverter.IsExited OrElse Not TextArea.IsValidated Then Return
         MyConverter.IsExited = True
         MyConverter.Result = TextArea.Text
         Close()
     End Sub
     Public Sub Btn2_Click() Handles Btn2.Click
-        If MyConverter.IsExited Then Exit Sub
+        If MyConverter.IsExited Then Return
         MyConverter.IsExited = True
         MyConverter.Result = Nothing
         Close()
     End Sub
 
     Private Sub TextCaption_ValidateChanged(sender As Object, e As EventArgs) Handles TextArea.ValidateChanged
-        Btn1.IsEnabled = TextArea.ValidateResult = ""
+        Btn1.IsEnabled = TextArea.IsValidated
     End Sub
 
     Private Sub Drag(sender As Object, e As MouseButtonEventArgs) Handles PanBorder.MouseLeftButtonDown, LabTitle.MouseLeftButtonDown

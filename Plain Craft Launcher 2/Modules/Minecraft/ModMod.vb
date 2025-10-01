@@ -1,6 +1,7 @@
 ﻿Imports System.IO.Compression
 
 Public Module ModMod
+    Private Const LocalModCacheVersion As Integer = 8
 
     Public Class McMod
 
@@ -47,7 +48,7 @@ Public Module ModMod
             Get
                 Load()
                 If Not IsFileAvailable Then
-                    Return McModState.Unavaliable
+                    Return McModState.Unavailable
                 ElseIf Path.EndsWithF(".disabled", True) OrElse Path.EndsWithF(".old", True) Then
                     Return McModState.Disabled
                 Else
@@ -58,7 +59,7 @@ Public Module ModMod
         Public Enum McModState As Integer
             Fine = 0
             Disabled = 1
-            Unavaliable = 2
+            Unavailable = 2
         End Enum
 
 #End Region
@@ -72,7 +73,7 @@ Public Module ModMod
             Get
                 If _Name Is Nothing Then Load()
                 If _Name Is Nothing Then _Name = _ModId
-                If _Name Is Nothing Then _Name = GetFileNameWithoutExtentionFromPath(Path)
+                If _Name Is Nothing Then _Name = IO.Path.GetFileNameWithoutExtension(Path)
                 Return _Name
             End Get
             Set(value As String)
@@ -187,9 +188,9 @@ Public Module ModMod
         Private _Dependencies As New Dictionary(Of String, String)
         Private Sub AddDependency(ModID As String, Optional VersionRequirement As String = Nothing)
             '确保信息正确
-            If ModID Is Nothing OrElse ModID.Count < 2 Then Exit Sub
+            If ModID Is Nothing OrElse ModID.Count < 2 Then Return
             ModID = ModID.ToLower
-            If ModID = "name" OrElse Val(ModID).ToString = ModID Then Exit Sub '跳过 name 与纯数字 id
+            If ModID = "name" OrElse Val(ModID).ToString = ModID Then Return '跳过 name 与纯数字 id
             If VersionRequirement Is Nothing OrElse ((Not VersionRequirement.Contains(".")) AndAlso (Not VersionRequirement.Contains("-"))) OrElse VersionRequirement.Contains("$") Then
                 VersionRequirement = Nothing
             Else
@@ -278,7 +279,7 @@ Public Module ModMod
         ''' 进行文件可用性检查与 .class 以外的信息获取。
         ''' </summary>
         Public Sub Load(Optional ForceReload As Boolean = False)
-            If IsLoaded AndAlso Not ForceReload Then Exit Sub
+            If IsLoaded AndAlso Not ForceReload Then Return
             '初始化
             Init()
             Dim Jar As ZipArchive = Nothing
@@ -687,7 +688,7 @@ Finished:
         ''' </summary>
         Public ReadOnly Property CanUpdate As Boolean
             Get
-                Return ChangelogUrls.Any()
+                Return Not Setup.Get("UiHiddenFunctionModUpdate") AndAlso Not Setup.Get("VersionAdvanceDisableModUpdate", Version:=PageVersionLeft.Version) AndAlso ChangelogUrls.Any()
             End Get
         End Property
 
@@ -701,13 +702,13 @@ Finished:
                     Dim Info As New FileInfo(Path)
                     Dim CacheKey As String = GetHash($"{RawPath}-{Info.LastWriteTime.ToLongTimeString}-{Info.Length}-C")
                     Dim Cached As String = ReadIni(PathTemp & "Cache\ModHash.ini", CacheKey)
-                    If Cached <> "" Then
+                    If Cached <> "" AndAlso RegexCheck(Cached, "^\d+$") Then '#5062
                         _CurseForgeHash = Cached
                         Return _CurseForgeHash
                     End If
                     '读取文件
                     Dim data As New List(Of Byte)
-                    For Each b As Byte In File.ReadAllBytes(Path)
+                    For Each b As Byte In ReadFileBytes(Path)
                         If b = 9 OrElse b = 10 OrElse b = 13 OrElse b = 32 Then Continue For
                         data.Add(b)
                     Next
@@ -814,16 +815,17 @@ Finished:
 
             '等待 Mod 更新完成
             If PageVersionMod.UpdatingVersions.Contains(Loader.Input) Then
-                Log($"[Mod] 等待 Mod 更新完成后才能继续加载 Mod 列表")
+                Log($"[Mod] 等待 Mod 更新完成后才能继续加载 Mod 列表：" & Loader.Input)
                 Try
                     RunInUiWait(Sub() If FrmVersionMod IsNot Nothing Then FrmVersionMod.Load.Text = "正在更新 Mod")
                     Do Until Not PageVersionMod.UpdatingVersions.Contains(Loader.Input)
-                        If Loader.IsAborted Then Exit Sub
+                        If Loader.IsAborted Then Return
                         Thread.Sleep(100)
                     Loop
                 Finally
                     RunInUiWait(Sub() If FrmVersionMod IsNot Nothing Then FrmVersionMod.Load.Text = "正在加载 Mod 列表")
                 End Try
+                FrmVersionMod.LoaderRun(LoaderFolderRunType.UpdateOnly)
             End If
 
             '获取 Mod 文件夹下的可用文件列表
@@ -835,7 +837,7 @@ Finished:
                         '仅当 Forge 1.13- 且文件夹名与版本号相同时，才加载该子文件夹下的 Mod
                         If Not (PageVersionLeft.Version IsNot Nothing AndAlso PageVersionLeft.Version.Version.HasForge AndAlso
                                 PageVersionLeft.Version.Version.McCodeMain < 13 AndAlso
-                                File.Directory.Name = "1." & PageVersionLeft.Version.Version.McCodeMain & "." & PageVersionLeft.Version.Version.McCodeSub) Then
+                                File.Directory.Name = $"1.{PageVersionLeft.Version.Version.McCodeMain}.{PageVersionLeft.Version.Version.McCodeSub}") Then
                             Continue For
                         End If
                     End If
@@ -852,7 +854,7 @@ Finished:
             Dim Cache As New JObject
             Try
                 Dim CacheContent As String = ReadFile(CachePath)
-                If CacheContent <> "" Then
+                If Not String.IsNullOrWhiteSpace(CacheContent) Then
                     Cache = GetJson(CacheContent)
                     If Not Cache.ContainsKey("version") OrElse Cache("version").ToObject(Of Integer) <> LocalModCacheVersion Then
                         Log($"[Mod] 本地 Mod 信息缓存版本已过期，将弃用这些缓存信息", LogLevel.Debug)
@@ -861,6 +863,7 @@ Finished:
                 End If
             Catch ex As Exception
                 Log(ex, "读取本地 Mod 信息缓存失败，已重置")
+                Cache = New JObject
             End Try
             Cache("version") = LocalModCacheVersion
 
@@ -869,7 +872,7 @@ Finished:
             Dim ModUpdateList As New List(Of McMod)
             For Each ModFile As FileInfo In ModFileList
                 Loader.Progress += 0.94 / ModFileList.Count
-                If Loader.IsAborted Then Exit Sub
+                If Loader.IsAborted Then Return
                 '加载 McMod 对象
                 Dim ModEntry As New McMod(ModFile.FullName)
                 ModEntry.Load()
@@ -886,8 +889,8 @@ Finished:
                 End If
                 ModList.Add(ModEntry)
                 '读取 Comp 缓存
-                If ModEntry.State = McMod.McModState.Unavaliable Then Continue For
-                Dim CacheKey = ModEntry.ModrinthHash & PageVersionLeft.Version.Version.McName
+                If ModEntry.State = McMod.McModState.Unavailable Then Continue For
+                Dim CacheKey = ModEntry.ModrinthHash & PageVersionLeft.Version.Version.McName & GetTargetModLoaders().Join("")
                 If Cache.ContainsKey(CacheKey) Then
                     ModEntry.FromJson(Cache(CacheKey))
                     '如果缓存中的信息在 6 小时以内更新过，则无需重新获取
@@ -899,17 +902,17 @@ Finished:
             Log($"[Mod] 共有 {ModList.Count} 个 Mod，其中 {ModUpdateList.Where(Function(m) m.Comp Is Nothing).Count} 个需要联网获取信息，{ModUpdateList.Where(Function(m) m.Comp IsNot Nothing).Count} 个需要更新信息")
 
             '排序
-            ModList = Sort(ModList,
+            ModList = ModList.Sort(
             Function(Left As McMod, Right As McMod) As Boolean
-                If (Left.State = McMod.McModState.Unavaliable) <> (Right.State = McMod.McModState.Unavaliable) Then
-                    Return Left.State = McMod.McModState.Unavaliable
+                If (Left.State = McMod.McModState.Unavailable) <> (Right.State = McMod.McModState.Unavailable) Then
+                    Return Left.State = McMod.McModState.Unavailable
                 Else
                     Return Not Right.FileName.CompareTo(Left.FileName)
                 End If
             End Function)
 
             '回设
-            If Loader.IsAborted Then Exit Sub
+            If Loader.IsAborted Then Return
             Loader.Output = ModList
 
             '开始联网加载
@@ -923,45 +926,31 @@ Finished:
             Throw
         End Try
     End Sub
-
     '联网加载 Mod 详情
-    Private Const LocalModCacheVersion As Integer = 4
     Public McModDetailLoader As New LoaderTask(Of KeyValuePair(Of List(Of McMod), JObject), Integer)("Mod List Detail Loader", AddressOf McModDetailLoad)
     Private Sub McModDetailLoad(Loader As LoaderTask(Of KeyValuePair(Of List(Of McMod), JObject), Integer))
         Dim Mods As List(Of McMod) = Loader.Input.Key
         Dim Cache As JObject = Loader.Input.Value
         '获取作为检查目标的加载器和版本
+        '此处不应向下扩展检查的 MC 小版本，例如 Mod 在更新 1.16.5 后，对早期的 1.16.2 版本发布了修补补丁，这会导致 PCL 将 1.16.5 版本的 Mod 降级到 1.16.2
         Dim TargetMcVersion As McVersionInfo = PageVersionLeft.Version.Version
-        Dim ModLoaders As New List(Of CompModLoaderType)
-        If TargetMcVersion.HasForge Then ModLoaders.Add(CompModLoaderType.Forge)
-        If TargetMcVersion.HasFabric Then ModLoaders.Add(CompModLoaderType.Fabric)
-        If TargetMcVersion.HasLiteLoader Then ModLoaders.Add(CompModLoaderType.LiteLoader)
-        If Not ModLoaders.Any() Then ModLoaders.AddRange({CompModLoaderType.Forge, CompModLoaderType.Fabric, CompModLoaderType.LiteLoader, CompModLoaderType.Quilt})
+        Dim ModLoaders = GetTargetModLoaders()
         Dim McVersion = TargetMcVersion.McName
-        '暂不向下扩展检查的 MC 小版本
-        '例如：Mod 在更新 1.16.5 后，对早期的 1.16.2 版本发布了修补补丁，这会导致 PCL 将 1.16.5 版本的 Mod 降级到 1.16.2
-        'If TargetMcVersion.McCodeMain > 0 AndAlso TargetMcVersion.McCodeMain < 99 Then
-        '    McVersions.Add($"1.{TargetMcVersion.McCodeMain}")
-        '    For i = 1 To TargetMcVersion.McCodeSub
-        '        McVersions.Add($"1.{TargetMcVersion.McCodeMain}.{i}")
-        '    Next
-        'End If
-        'McVersions = McVersions.Distinct().ToList()
         '开始网络获取
         Log($"[Mod] 目标加载器：{ModLoaders.Join("/")}，版本：{McVersion}")
-        Dim EndedThreadCount As Integer = 0, SucceedThreadCount As Integer = 0
-        Dim MainThread As Thread = Thread.CurrentThread
+        Dim EndedThreadCount As Integer = 0, IsFailed As Boolean = False
+        Dim CurrentTaskThread As Thread = Thread.CurrentThread
         '从 Modrinth 获取信息
         RunInNewThread(
         Sub()
             Try
                 '步骤 1：获取 Hash 与对应的工程 ID
                 Dim ModrinthHashes = Mods.Select(Function(m) m.ModrinthHash).ToList()
-                Dim ModrinthVersion = CType(GetJson(NetRequestRetry("https://api.modrinth.com/v2/version_files", "POST",
-                    $"{{""hashes"": [""{ModrinthHashes.Join(""",""")}""], ""algorithm"": ""sha1""}}", "application/json")), JObject)
+                Dim ModrinthVersion As JObject = DlModRequest("https://api.modrinth.com/v2/version_files", HttpMethod.Post,
+                    $"{{""hashes"": [""{ModrinthHashes.Join(""",""")}""], ""algorithm"": ""sha1""}}", "application/json")
                 Log($"[Mod] 从 Modrinth 获取到 {ModrinthVersion.Count} 个本地 Mod 的对应信息")
                 '步骤 2：尝试读取工程信息缓存，构建其他 Mod 的对应关系
-                If ModrinthVersion.Count = 0 Then Exit Sub
+                If ModrinthVersion.Count = 0 Then Return
                 Dim ModrinthMapping As New Dictionary(Of String, List(Of McMod))
                 For Each Entry In Mods
                     If Not ModrinthVersion.ContainsKey(Entry.ModrinthHash) Then Continue For
@@ -974,25 +963,23 @@ Finished:
                     Dim File As New CompFile(ModrinthVersion(Entry.ModrinthHash), CompType.Mod)
                     If Entry.CompFile Is Nothing OrElse Entry.CompFile.ReleaseDate < File.ReleaseDate Then Entry.CompFile = File
                 Next
-                If Loader.IsAbortedWithThread(MainThread) Then Exit Sub
+                If Loader.IsAbortedWithThread(CurrentTaskThread) Then Return
                 Log($"[Mod] 需要从 Modrinth 获取 {ModrinthMapping.Count} 个本地 Mod 的工程信息")
                 '步骤 3：获取工程信息
-                If Not ModrinthMapping.Any() Then Exit Sub
-                Dim ModrinthProject = CType(GetJson(NetRequestRetry(
-                    $"https://api.modrinth.com/v2/projects?ids=[""{ModrinthMapping.Keys.Join(""",""")}""]",
-                    "GET", "", "application/json")), JArray)
+                If Not ModrinthMapping.Any() Then Return
+                Dim ModrinthProject As JArray = DlModRequest(
+                    $"https://api.modrinth.com/v2/projects?ids=[""{ModrinthMapping.Keys.Join(""",""")}""]")
                 For Each ProjectJson In ModrinthProject
                     Dim Project As New CompProject(ProjectJson)
                     For Each Entry In ModrinthMapping(Project.Id)
-                        If Entry.Comp IsNot Nothing AndAlso Entry.Comp.FromCurseForge Then Project.LogoUrl = Entry.Comp.LogoUrl 'Modrinth 的部分 Logo 不是图片，如果可能，使用 CurseForge 的 Logo
                         Entry.Comp = Project
                     Next
                 Next
                 Log($"[Mod] 已从 Modrinth 获取本地 Mod 信息，继续获取更新信息")
                 '步骤 4：获取更新信息
-                Dim ModrinthUpdate = CType(GetJson(NetRequestRetry("https://api.modrinth.com/v2/version_files/update", "POST",
+                Dim ModrinthUpdate As JObject = DlModRequest("https://api.modrinth.com/v2/version_files/update", HttpMethod.Post,
                     $"{{""hashes"": [""{ModrinthMapping.SelectMany(Function(l) l.Value.Select(Function(m) m.ModrinthHash)).Join(""",""")}""], ""algorithm"": ""sha1"", 
-                    ""loaders"": [""{ModLoaders.Join(""",""").ToLower}""],""game_versions"": [""{McVersion}""]}}", "application/json")), JObject)
+                    ""loaders"": [""{ModLoaders.Join(""",""").ToLower}""],""game_versions"": [""{McVersion}""]}}", "application/json")
                 For Each Entry In Mods
                     If Not ModrinthUpdate.ContainsKey(Entry.ModrinthHash) OrElse Entry.CompFile Is Nothing Then Continue For
                     Dim UpdateFile As New CompFile(ModrinthUpdate(Entry.ModrinthHash), CompType.Mod)
@@ -1010,9 +997,9 @@ Finished:
                     End If
                 Next
                 Log($"[Mod] 从 Modrinth 获取本地 Mod 信息结束")
-                SucceedThreadCount += 1
             Catch ex As Exception
                 Log(ex, "从 Modrinth 获取本地 Mod 信息失败")
+                IsFailed = True
             Finally
                 EndedThreadCount += 1
             End Try
@@ -1025,13 +1012,13 @@ Finished:
                 Dim CurseForgeHashes As New List(Of UInteger)
                 For Each Entry In Mods
                     CurseForgeHashes.Add(Entry.CurseForgeHash)
-                    If Loader.IsAbortedWithThread(MainThread) Then Exit Sub
+                    If Loader.IsAbortedWithThread(CurrentTaskThread) Then Return
                 Next
-                Dim CurseForgeRaw = CType(CType(GetJson(NetRequestRetry("https://api.curseforge.com/v1/fingerprints/432/", "POST",
-                                    $"{{""fingerprints"": [{CurseForgeHashes.Join(",")}]}}", "application/json")), JObject)("data")("exactMatches"), JContainer)
+                Dim CurseForgeRaw As JContainer = DlModRequest("https://api.curseforge.com/v1/fingerprints/432", HttpMethod.Post,
+                    $"{{""fingerprints"": [{CurseForgeHashes.Join(",")}]}}", "application/json")("data")("exactMatches")
                 Log($"[Mod] 从 CurseForge 获取到 {CurseForgeRaw.Count} 个本地 Mod 的对应信息")
                 '步骤 2：尝试读取工程信息缓存，构建其他 Mod 的对应关系
-                If Not CurseForgeRaw.Any() Then Exit Sub
+                If Not CurseForgeRaw.Any() Then Return
                 Dim CurseForgeMapping As New Dictionary(Of Integer, List(Of McMod))
                 For Each Project In CurseForgeRaw
                     Dim ProjectId = Project("id").ToString
@@ -1046,34 +1033,33 @@ Finished:
                         If Entry.CompFile Is Nothing OrElse Entry.CompFile.ReleaseDate < File.ReleaseDate Then Entry.CompFile = File
                     Next
                 Next
-                If Loader.IsAbortedWithThread(MainThread) Then Exit Sub
+                If Loader.IsAbortedWithThread(CurrentTaskThread) Then Return
                 Log($"[Mod] 需要从 CurseForge 获取 {CurseForgeMapping.Count} 个本地 Mod 的工程信息")
                 '步骤 3：获取工程信息
-                If Not CurseForgeMapping.Any() Then Exit Sub
-                Dim CurseForgeProject = CType(GetJson(NetRequestRetry("https://api.curseforge.com/v1/mods", "POST",
-                                    $"{{""modIds"": [{CurseForgeMapping.Keys.Join(",")}]}}", "application/json")), JObject)("data")
+                If Not CurseForgeMapping.Any() Then Return
+                Dim CurseForgeProject = DlModRequest("https://api.curseforge.com/v1/mods", HttpMethod.Post,
+                    $"{{""modIds"": [{CurseForgeMapping.Keys.Join(",")}]}}", "application/json")("data")
                 Dim UpdateFileIds As New Dictionary(Of Integer, List(Of McMod)) 'FileId -> 本地 Mod 文件列表
                 Dim FileIdToProjectSlug As New Dictionary(Of Integer, String)
                 For Each ProjectJson In CurseForgeProject
-                    If Not ProjectJson("isAvailable").ToObject(Of Boolean) Then Continue For
+                    If ProjectJson("isAvailable") IsNot Nothing AndAlso Not ProjectJson("isAvailable").ToObject(Of Boolean) Then Continue For
                     '设置 Entry 中的工程信息
                     Dim Project As New CompProject(ProjectJson)
                     For Each Entry In CurseForgeMapping(Project.Id) '倒查防止 CurseForge 返回的内容有漏
                         If Entry.Comp IsNot Nothing AndAlso Not Entry.Comp.FromCurseForge Then
-                            Entry.Comp.LogoUrl = Project.LogoUrl 'Modrinth 部分 Logo 加载不出来
                             Entry.Comp = Entry.Comp '再次触发修改事件
                             Continue For
                         End If
                         Entry.Comp = Project
                     Next
                     '查找或许版本更新的文件列表
-                    If ModLoaders.Count = 1 Then 'TODO: 结果有多个 ModLoader 时提示无法检测更新
+                    If ModLoaders.Count = 1 Then
                         Dim NewestVersion As String = Nothing
                         Dim NewestFileIds As New List(Of Integer)
                         For Each IndexEntry In ProjectJson("latestFilesIndexes")
-                            If ModLoaders.Single <> IndexEntry("modLoader")?.ToObject(Of Integer) Then Continue For 'ModLoader 唯一且匹配
+                            If IndexEntry("modLoader") Is Nothing OrElse ModLoaders.Single <> IndexEntry("modLoader").ToObject(Of Integer) Then Continue For 'ModLoader 唯一且匹配
                             Dim IndexVersion As String = IndexEntry("gameVersion")
-                            If McVersion <> IndexVersion Then Continue For 'MC 版本匹配
+                            If IndexVersion <> McVersion Then Continue For 'MC 版本匹配
                             '由于 latestFilesIndexes 是按时间从新到老排序的，所以只需取第一个；如果需要检查多个 releaseType 下的文件，将 > -1 改为 = 1，但这应当并不会获取到更新的文件
                             If NewestVersion IsNot Nothing AndAlso VersionSortInteger(NewestVersion, IndexVersion) > -1 Then Continue For '只保留最新 MC 版本
                             If NewestVersion <> IndexVersion Then
@@ -1091,9 +1077,9 @@ Finished:
                 Next
                 Log($"[Mod] 已从 CurseForge 获取本地 Mod 信息，需要获取 {UpdateFileIds.Count} 个用于检查更新的文件信息")
                 '步骤 4：获取更新文件信息
-                If Not UpdateFileIds.Any() Then Exit Sub
-                Dim CurseForgeFiles = CType(GetJson(NetRequestRetry("https://api.curseforge.com/v1/mods/files", "POST",
-                                    $"{{""fileIds"": [{UpdateFileIds.Keys.Join(",")}]}}", "application/json")), JObject)("data")
+                If Not UpdateFileIds.Any() Then Return
+                Dim CurseForgeFiles = DlModRequest("https://api.curseforge.com/v1/mods/files", HttpMethod.Post,
+                                    $"{{""fileIds"": [{UpdateFileIds.Keys.Join(",")}]}}", "application/json")("data")
                 Dim UpdateFiles As New Dictionary(Of McMod, CompFile)
                 For Each FileJson In CurseForgeFiles
                     Dim File As New CompFile(FileJson, CompType.Mod)
@@ -1118,28 +1104,44 @@ Finished:
                     End If
                 Next
                 Log($"[Mod] 从 CurseForge 获取 Mod 更新信息结束")
-                SucceedThreadCount += 1
             Catch ex As Exception
                 Log(ex, "从 CurseForge 获取本地 Mod 信息失败")
+                IsFailed = True
             Finally
                 EndedThreadCount += 1
             End Try
         End Sub, "Mod List Detail Loader CurseForge")
         '等待线程结束
         Do Until EndedThreadCount = 2
-            If Loader.IsAborted Then Exit Sub
             Thread.Sleep(10)
+            If Loader.IsAborted Then Return
         Loop
         '保存缓存
         Mods = Mods.Where(Function(m) m.Comp IsNot Nothing).ToList()
         Log($"[Mod] 联网获取本地 Mod 信息完成，为 {Mods.Count} 个 Mod 更新缓存")
-        If Not Mods.Any() Then Exit Sub
-        For Each Entry In Mods 'TODO: Bookshelf 的 Logo 会在两个网站间横跳
-            Entry.CompLoaded = SucceedThreadCount = 2
-            Cache(Entry.ModrinthHash & McVersion) = Entry.ToJson()
+        If Not Mods.Any() Then Return
+        For Each Entry In Mods
+            Entry.CompLoaded = Not IsFailed
+            Cache(Entry.ModrinthHash & McVersion & ModLoaders.Join("")) = Entry.ToJson()
         Next
         WriteFile(PathTemp & "Cache\LocalMod.json", Cache.ToString(If(ModeDebug, Newtonsoft.Json.Formatting.Indented, Newtonsoft.Json.Formatting.None)))
+        '刷新边栏
+        If Loader.IsAborted Then Return
+        If FrmVersionMod?.Filter = PageVersionMod.FilterType.CanUpdate Then
+            RunInUi(Sub() FrmVersionMod?.RefreshUI()) '同步 “可更新” 列表 (#4677)
+        Else
+            RunInUi(Sub() FrmVersionMod?.RefreshBars())
+        End If
     End Sub
+    Public Function GetTargetModLoaders() As List(Of CompModLoaderType)
+        Dim ModLoaders As New List(Of CompModLoaderType)
+        If PageVersionLeft.Version.Version.HasForge Then ModLoaders.Add(CompModLoaderType.Forge)
+        If PageVersionLeft.Version.Version.HasNeoForge Then ModLoaders.Add(CompModLoaderType.NeoForge)
+        If PageVersionLeft.Version.Version.HasFabric Then ModLoaders.Add(CompModLoaderType.Fabric)
+        If PageVersionLeft.Version.Version.HasLiteLoader Then ModLoaders.Add(CompModLoaderType.LiteLoader)
+        If Not ModLoaders.Any() Then ModLoaders.AddRange({CompModLoaderType.Forge, CompModLoaderType.NeoForge, CompModLoaderType.Fabric, CompModLoaderType.LiteLoader, CompModLoaderType.Quilt})
+        Return ModLoaders
+    End Function
 
 #If DEBUG Then
     ''' <summary>
@@ -1211,7 +1213,7 @@ Finished:
                         If ReqVersionHead = ReqVersionTail Then
                             VersionRequire = "应为 " & ReqVersionHead
                         ElseIf ReqVersionHead.Contains(".") AndAlso ReqVersionTail.Contains(".") Then
-                            VersionRequire = "应为 " & ReqVersionHead & " 至 " & ReqVersionTail
+                            VersionRequire = $"应为 {ReqVersionHead} 至 {ReqVersionTail}"
                         ElseIf ReqVersionHead.Contains(".") Then
                             If ReqVersionHeadCanEqual Then
                                 VersionRequire = "最低应为 " & ReqVersionHead
@@ -1229,7 +1231,7 @@ Finished:
                         End If
                         '检查前置 Mod 是否存在，并获取其版本
                         If Not CurrentDependencies.ContainsKey(ReqId) Then
-                            Result.Add("缺少前置 Mod：" & ReqId & If(VersionRequire = "", "", "，其版本" & VersionRequire) & "。" & vbCrLf & " - " & ModEntity.FileName)
+                            Result.Add($"缺少前置 Mod：{ReqId}{If(VersionRequire = "", "", "，其版本" & VersionRequire)}。{vbCrLf} - {ModEntity.FileName}")
                             Continue For
                         End If
                         Dim CurrentVersion As String = If(CurrentDependencies(ReqId)(0), "0.0")
@@ -1238,7 +1240,7 @@ Finished:
                         If ReqVersionHead.Contains(".") Then
                             If VersionSortInteger(ReqVersionHead, CurrentVersion) > If(ReqVersionHeadCanEqual, 0, -1) Then
                                 Result.Add(ReqId.Substring(0, 1).ToUpper & ReqId.Substring(1) & " 版本过低，其版本" & VersionRequire & "，而当前版本为 " & CurrentVersion & "。" & vbCrLf &
-                                           " - " & ModEntity.FileName & If(ReqId <> "minecraft" AndAlso ReqId <> "forge", vbCrLf & " - 前置：" & CurrentDependencies(ReqId)(1), ""))
+                                           " - " & ModEntity.FileName & If(ReqId <> "minecraft" AndAlso ReqId <> "forge", $"{vbCrLf} - 前置：{CurrentDependencies(ReqId)(1)}", ""))
                                 Continue For
                             End If
                         End If
@@ -1246,26 +1248,26 @@ Finished:
                         If ReqVersionTail.Contains(".") Then
                             If VersionSortInteger(CurrentVersion, ReqVersionTail) > If(ReqVersionTailCanEqual, 0, -1) Then
                                 Result.Add(ReqId.Substring(0, 1).ToUpper & ReqId.Substring(1) & " 版本过高，其版本" & VersionRequire & "，而当前版本为 " & CurrentVersion & "。" & vbCrLf &
-                                           " - " & ModEntity.FileName & If(ReqId <> "minecraft" AndAlso ReqId <> "forge", vbCrLf & " - 前置：" & CurrentDependencies(ReqId)(1), ""))
+                                           " - " & ModEntity.FileName & If(ReqId <> "minecraft" AndAlso ReqId <> "forge", $"{vbCrLf} - 前置：{CurrentDependencies(ReqId)(1)}", ""))
                                 Continue For
                             End If
                         End If
                     Else
                         If Not CurrentDependencies.ContainsKey(Dependency.Key) Then
-                            Result.Add("缺少前置 Mod：" & Dependency.Key & "。" & vbCrLf & " - " & ModEntity.FileName)
+                            Result.Add($"缺少前置 Mod：{Dependency.Key}。{vbCrLf} - {ModEntity.FileName}")
                             Continue For
                         End If
                     End If
                 Next
             Catch ex As Exception
-                Result.Add("检查 Mod 时出错：" & GetExceptionSummary(ex) & vbCrLf & " - " & ModEntity.FileName)
+                Result.Add($"检查 Mod 时出错：{ex.GetBrief()}{vbCrLf} - {ModEntity.FileName}")
                 Log(ex, "检查 Mod 时出错")
             End Try
         Next
         If Not Result.Any() Then
             Log("[Minecraft] Mod 检查未发现异常")
         Else
-            Log("[Minecraft] Mod 检查异常结果：" & vbCrLf & Join(Result, vbCrLf))
+            Log($"[Minecraft] Mod 检查异常结果：{vbCrLf}{Join(Result, vbCrLf)}")
         End If
         Return Result
     End Function

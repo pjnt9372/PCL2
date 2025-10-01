@@ -3,16 +3,16 @@
     Public PageUuid As Integer = GetUuid()
 
     '“返回顶部” 按钮检测的滚动区域
-    Public Property PanScroll As MyScrollViewer
+    Public Property PanScroll As String '需要在 Loaded 之后才能获取到控件，所以不能用 Binding 直接绑定（#6664）
         Get
             Return GetValue(PanScrollProperty)
         End Get
-        Set(value As MyScrollViewer)
+        Set(value As String)
             SetValue(PanScrollProperty, value)
         End Set
     End Property
     Private Shared ReadOnly PanScrollProperty =
-        DependencyProperty.Register("PanScroll", GetType(MyScrollViewer), GetType(MyPageRight), New PropertyMetadata(Nothing))
+        DependencyProperty.Register("PanScroll", GetType(String), GetType(MyPageRight), New PropertyMetadata(Nothing))
 
     '当前状态
     Public Enum PageStates
@@ -33,7 +33,7 @@
             Return _PageState
         End Get
         Set(value As PageStates)
-            If _PageState = value Then Exit Property
+            If _PageState = value Then Return
             _PageState = value
             If ModeDebug Then Log("[UI] 页面状态切换为 " & GetStringFromEnum(value))
         End Set
@@ -74,13 +74,13 @@
         '添加结束 Invoke
         If FinishedInvoke IsNot Nothing Then
             AddHandler RealLoader.PreviewFinish,
-                Sub()
-                    Do While PageState = MyPageRight.PageStates.PageExit OrElse PageState = MyPageRight.PageStates.ContentExit
-                        Thread.Sleep(10) '不在退出动画时执行 UI 线程操作，避免退出动画被重置
-                    Loop
-                    RunInUiWait(Sub() FinishedInvoke(RealLoader))
-                    Thread.Sleep(20) '由于大量初始化控件会导致掉帧，延迟触发 State 改变事件
-                End Sub
+            Sub()
+                Do While PageState = MyPageRight.PageStates.PageExit OrElse PageState = MyPageRight.PageStates.ContentExit
+                    Thread.Sleep(10) '不在退出动画时执行 UI 线程操作，避免退出动画被重置
+                Loop
+                RunInUiWait(Sub() FinishedInvoke(RealLoader))
+                Thread.Sleep(20) '由于大量初始化控件会导致掉帧，延迟触发 State 改变事件
+            End Sub
         End If
         AddHandler RealLoader.OnStateChangedUi, Sub(Loader As LoaderBase, NewState As LoadState, OldState As LoadState) RunInUi(Sub() PageLoaderState(Loader, NewState, OldState))
         '隐藏 UI
@@ -106,7 +106,7 @@
     End Sub
     '重试
     Public Sub PageLoaderRestart(Optional Input As Object = Nothing, Optional IsForceRestart As Boolean = True) '由外部调用的重试
-        If Not PageLoaderAutoRun Then Exit Sub
+        If Not PageLoaderAutoRun Then Return
         If PageLoader.GetType.Name.StartsWithF("LoaderTask") Then
             PageLoader.Start(CType(PageLoader, Object).StartGetInput(Input, PageLoaderInputInvoke), IsForceRestart:=IsForceRestart)
         Else
@@ -187,7 +187,7 @@
     ''' 需要立即切换至 Empty。
     ''' </summary>
     Public Sub PageOnForceExit()
-        If PageState = PageStates.Empty Then Exit Sub
+        If PageState = PageStates.Empty Then Return
         If ModeDebug Then Log("[UI] 已触发 PageOnForceExit")
         PageState = PageStates.Empty
         AniStop("PageRight PageChange " & PageUuid)
@@ -302,7 +302,7 @@
     Private Sub PageLoaderState(sender As Object, NewState As LoadState, OldState As LoadState)
         Select Case NewState
             Case LoadState.Failed, LoadState.Loading
-                If OldState = LoadState.Failed OrElse OldState = LoadState.Loading Then Exit Sub
+                If OldState = LoadState.Failed OrElse OldState = LoadState.Loading Then Return
                 If ModeDebug Then Log("[UI] 已触发 PageLoaderState (Start/Refresh)")
                 '（重新）开始运行
                 '需要从部分状态切换到 ReloadExit
@@ -314,7 +314,7 @@
                         PageState = PageStates.ContentExit
                 End Select
             Case LoadState.Finished, LoadState.Aborted, LoadState.Waiting
-                If Not (OldState = LoadState.Failed OrElse OldState = LoadState.Loading) Then Exit Sub
+                If Not (OldState = LoadState.Failed OrElse OldState = LoadState.Loading) Then Return
                 If ModeDebug Then Log("[UI] 已触发 PageLoaderState (Stop/Abort)")
                 '运行结束
                 '需要从 LoaderWait 切换到 ContentEnter，或从 LoaderStay 切换到 LoaderExit
@@ -353,12 +353,16 @@
                 If Control.RenderTransform IsNot Nothing AndAlso TypeOf Control.RenderTransform Is TranslateTransform Then Control.RenderTransform = Nothing
             Next
             For Each Control As FrameworkElement In GetAllAnimControls(Element)
-                Control.Opacity = 0
-                Control.RenderTransform = New TranslateTransform(0, -16)
-                AniList.Add(AaOpacity(Control, 1, 150, Delay, New AniEaseOutFluent(AniEasePower.Weak)))
-                AniList.Add(AaTranslateY(Control, 5, 250, Delay, New AniEaseOutFluent))
-                AniList.Add(AaTranslateY(Control, 11, 350, Delay, New AniEaseOutBack))
-                Delay += 40
+                If TypeOf Control Is MyExtraTextButton Then
+                    CType(Control, MyExtraTextButton).Show = True
+                Else
+                    Control.Opacity = 0
+                    Control.RenderTransform = New TranslateTransform(0, -16)
+                    AniList.Add(AaOpacity(Control, 1, 100, Delay, New AniEaseOutFluent(AniEasePower.Weak)))
+                    AniList.Add(AaTranslateY(Control, 5, 250, Delay, New AniEaseOutFluent))
+                    AniList.Add(AaTranslateY(Control, 11, 350, Delay, New AniEaseOutBack))
+                    Delay += 25
+                End If
             Next
         Next
         '滚动条动画
@@ -379,10 +383,14 @@
         Dim Delay As Integer = 0
         For Each Element In RealElements
             For Each Control As FrameworkElement In GetAllAnimControls(Element)
-                Control.IsHitTestVisible = False
-                AniList.Add(AaOpacity(Control, -1, 90, Delay))
-                AniList.Add(AaTranslateY(Control, -6, 90, Delay))
-                Delay += 20
+                If TypeOf Control Is MyExtraTextButton Then
+                    CType(Control, MyExtraTextButton).Show = False
+                Else
+                    Control.IsHitTestVisible = False
+                    AniList.Add(AaOpacity(Control, -1, 70, Delay))
+                    AniList.Add(AaTranslateY(Control, -6, 70, Delay))
+                    Delay += 15
+                End If
             Next
         Next
         '滚动条动画
@@ -392,31 +400,38 @@
             AniList.Add(AaTranslateX(Scroll, 10 - CType(Scroll.RenderTransform, TranslateTransform).X, 90, 0, New AniEaseInFluent))
         End If
         '结束
-        AniList.Add(AaCode(Sub()
-                               For Each Element In RealElements
-                                   Element.Visibility = Visibility.Collapsed
-                               Next
-                               PageOnExitAnimationFinished()
-                           End Sub,, True))
+        AniList.Add(AaCode(
+        Sub()
+            For Each Element In RealElements
+                Element.Visibility = Visibility.Collapsed
+            Next
+            PageOnExitAnimationFinished()
+        End Sub,, True))
         AniStart(AniList, "PageRight PageChange " & PageUuid)
     End Sub
 
-    '遍历获取所有需要生成动画的控件
-    Friend Function GetAllAnimControls(Element As FrameworkElement, Optional IgnoreInvisibility As Boolean = False) As List(Of FrameworkElement)
+    ''' <summary>
+    ''' 禁用页面切换动画的控件列表。
+    ''' </summary>
+    Public DisabledPageAnimControls As New List(Of FrameworkElement)
+    ''' <summary>
+    ''' 遍历获取所有需要生成动画的控件。
+    ''' </summary>
+    Friend Function GetAllAnimControls(Element As FrameworkElement, Optional IgnoreInvisibility As Boolean = False) As IEnumerable(Of FrameworkElement)
         Dim AllControls As New List(Of FrameworkElement)
-        GetAllAnimControls(Element, AllControls, IgnoreInvisibility)
-        Return AllControls
+        _GetAllAnimControls(Element, AllControls, IgnoreInvisibility)
+        Return AllControls.Except(DisabledPageAnimControls)
     End Function
-    Private Sub GetAllAnimControls(Element As FrameworkElement, ByRef AllControls As List(Of FrameworkElement), IgnoreInvisibility As Boolean)
-        If Not IgnoreInvisibility AndAlso Element.Visibility = Visibility.Collapsed Then Exit Sub
-        If TypeOf Element Is MyCard OrElse TypeOf Element Is MyHint OrElse TypeOf Element Is TextBlock OrElse TypeOf Element Is MyTextButton Then
+    Private Sub _GetAllAnimControls(Element As FrameworkElement, ByRef AllControls As List(Of FrameworkElement), IgnoreInvisibility As Boolean)
+        If Not IgnoreInvisibility AndAlso Element.Visibility = Visibility.Collapsed Then Return
+        If TypeOf Element Is MyCard OrElse TypeOf Element Is MyHint OrElse TypeOf Element Is MyExtraTextButton OrElse TypeOf Element Is TextBlock OrElse TypeOf Element Is MyTextButton Then
             AllControls.Add(Element)
         ElseIf TypeOf Element Is ContentControl Then
             Dim Content = CType(Element, ContentControl).Content
-            If Content IsNot Nothing AndAlso TypeOf Content Is FrameworkElement Then GetAllAnimControls(Content, AllControls, IgnoreInvisibility)
+            If Content IsNot Nothing AndAlso TypeOf Content Is FrameworkElement Then _GetAllAnimControls(Content, AllControls, IgnoreInvisibility)
         ElseIf TypeOf Element Is Panel Then
             For Each Element2 In CType(Element, Panel).Children
-                If TypeOf Element2 Is FrameworkElement Then GetAllAnimControls(Element2, AllControls, IgnoreInvisibility)
+                If TypeOf Element2 Is FrameworkElement Then _GetAllAnimControls(Element2, AllControls, IgnoreInvisibility)
             Next
         End If
     End Sub

@@ -57,7 +57,7 @@
     Private Const AnimationTimeIn As Integer = 100
     Private Const AnimationTimeOut As Integer = 200
     Private ColorName As String
-    Private Sub RefreshColor() Handles Me.MouseEnter, Me.MouseLeave, Me.IsEnabledChanged, Me.MouseLeftButtonDown， Me.MouseLeftButtonUp
+    Private Sub RefreshColor() Handles Me.MouseEnter, Me.MouseLeave, Me.IsEnabledChanged, Me.MouseLeftButtonDown, Me.MouseLeftButtonUp
         '判断当前颜色
         Dim ForeName As String
         Dim Time As Integer
@@ -72,7 +72,7 @@
             Time = AnimationTimeOut
         End If
         '重复性验证
-        If ColorName = ForeName Then Exit Sub
+        If ColorName = ForeName Then Return
         ColorName = ForeName
         '触发颜色动画
         If IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
@@ -90,21 +90,21 @@
         Get
             Return GetValue(EventTypeProperty)
         End Get
-
         Set(value As String)
             SetValue(EventTypeProperty, value)
         End Set
     End Property
-    Public Shared ReadOnly EventTypeProperty As DependencyProperty = DependencyProperty.Register("EventType", GetType(String), GetType(MyTextButton), New PropertyMetadata(Nothing))
+    Public Shared ReadOnly EventTypeProperty As DependencyProperty = DependencyProperty.Register(
+        "EventType", GetType(String), GetType(MyTextButton), New PropertyMetadata(Nothing))
     Public Property EventData As String
         Get
             Return GetValue(EventDataProperty)
         End Get
-
         Set(value As String)
             SetValue(EventDataProperty, value)
         End Set
     End Property
-    Public Shared ReadOnly EventDataProperty As DependencyProperty = DependencyProperty.Register("EventData", GetType(String), GetType(MyTextButton), New PropertyMetadata(Nothing))
+    Public Shared ReadOnly EventDataProperty As DependencyProperty = DependencyProperty.Register(
+        "EventData", GetType(String), GetType(MyTextButton), New PropertyMetadata(Nothing))
 
 End Class

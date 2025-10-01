@@ -1,4 +1,7 @@
-﻿Public Class MyListItem
+﻿Imports System.Windows.Markup
+
+<ContentProperty("Inlines")>
+Public Class MyListItem
     Implements IMyRadio
 
     Public Event Click(sender As Object, e As MouseButtonEventArgs)
@@ -161,12 +164,17 @@
     End Property
 
     '标题
+    Public ReadOnly Property Inlines As InlineCollection
+        Get
+            Return LabTitle.Inlines
+        End Get
+    End Property
     Public Property Title As String
         Get
             Return GetValue(TitleProperty)
         End Get
         Set(value As String)
-            SetValue(TitleProperty, value)
+            SetValue(TitleProperty, value.Replace(vbCr, "").Replace(vbLf, ""))
         End Set
     End Property
     Public Shared ReadOnly TitleProperty As DependencyProperty = DependencyProperty.Register("Title", GetType(String), GetType(MyListItem))
@@ -189,7 +197,7 @@
             Return _Info
         End Get
         Set(value As String)
-            If _Info = value Then Exit Property
+            If _Info = value Then Return
             value = value.Replace(vbCr, "").Replace(vbLf, "")
             _Info = value
             LabInfo.Text = value
@@ -204,7 +212,7 @@
             Return _Logo
         End Get
         Set(value As String)
-            If _Logo = value Then Exit Property
+            If _Logo = value Then Return
             _Logo = value
             '删除旧 Logo
             If Not IsNothing(PathLogo) Then Children.Remove(PathLogo)
@@ -212,33 +220,26 @@
             If Not _Logo = "" Then
                 If _Logo.StartsWithF("http", True) Then
                     '网络图片
-                    PathLogo = New Image With {
+                    PathLogo = New MyImage With {
                             .Tag = Me,
                             .IsHitTestVisible = LogoClickable,
-                            .Source = New ImageSourceConverter().ConvertFromString(_Logo),
+                            .Source = _Logo,
                             .RenderTransformOrigin = New Point(0.5, 0.5),
                             .RenderTransform = New ScaleTransform With {.ScaleX = LogoScale, .ScaleY = LogoScale},
                             .SnapsToDevicePixels = True, .UseLayoutRounding = False}
                     RenderOptions.SetBitmapScalingMode(PathLogo, BitmapScalingMode.Linear)
-                ElseIf _Logo.EndsWithF(".png", True) OrElse _Logo.EndsWithF(".jpg", True) Then
+                ElseIf _Logo.EndsWithF(".png", True) OrElse _Logo.EndsWithF(".jpg", True) OrElse _Logo.EndsWithF(".webp", True) Then
                     '位图
-                    Dim Bitmap = New MyBitmap(_Logo)
                     PathLogo = New Canvas With {
                             .Tag = Me,
                             .IsHitTestVisible = LogoClickable,
-                            .Background = Bitmap,
+                            .Background = New MyBitmap(_Logo),
                             .RenderTransformOrigin = New Point(0.5, 0.5),
                             .RenderTransform = New ScaleTransform With {.ScaleX = LogoScale, .ScaleY = LogoScale},
-                            .SnapsToDevicePixels = True, .UseLayoutRounding = False}
-                    'If Bitmap.Pic.Width = 16 AndAlso Bitmap.Pic.Height = 16 Then
-                    '    '使用最适合 16x16 物品图片显示的大小
-                    '    RenderOptions.SetBitmapScalingMode(PathLogo, BitmapScalingMode.NearestNeighbor)
-                    '    PathLogo.HorizontalAlignment = HorizontalAlignment.Center : PathLogo.VerticalAlignment = VerticalAlignment.Center
-                    '    PathLogo.Width = GetWPFSize(Math.Floor(GetPixelSize(32) / 16) * 16) : PathLogo.Height = PathLogo.Width
-                    'Else
-                    PathLogo.HorizontalAlignment = HorizontalAlignment.Stretch : PathLogo.VerticalAlignment = VerticalAlignment.Stretch
-                    RenderOptions.SetBitmapScalingMode(PathLogo, BitmapScalingMode.HighQuality)
-                    'End If
+                            .SnapsToDevicePixels = True, .UseLayoutRounding = False,
+                            .HorizontalAlignment = HorizontalAlignment.Stretch, .VerticalAlignment = VerticalAlignment.Stretch
+                    }
+                    RenderOptions.SetBitmapScalingMode(PathLogo, BitmapScalingMode.Linear)
                 Else
                     '矢量图
                     PathLogo = New Shapes.Path With {
@@ -296,7 +297,7 @@
             Return _Type
         End Get
         Set(value As CheckType)
-            If _Type = value Then Exit Property
+            If _Type = value Then Return
             _Type = value
             '切换左栏大小
             ColumnCheck.Width = New GridLength(If(_Type = CheckType.None OrElse _Type = CheckType.Clickable, If(Height < 40, 4, 2), 6))
@@ -327,8 +328,8 @@
     Private Sub OnSizeChanged() Handles Me.SizeChanged
         ColumnCheck.Width = New GridLength(If(_Type = CheckType.None OrElse _Type = CheckType.Clickable, If(Height < 40, 4, 2), 6))
         ColumnLogo.Width = New GridLength(If(_Logo = "", 0, 34) + If(Height < 40, 0, 4))
-        If Not IsNothing(PathLogo) Then
-            If _Logo.EndsWithF(".png", True) Then
+        If PathLogo IsNot Nothing Then
+            If _Logo.EndsWithF(".png", True) OrElse _Logo.EndsWithF(".jpg", True) OrElse _Logo.EndsWithF(".webp", True) Then
                 PathLogo.Margin = New Thickness(4, 5, 3, 5)
             Else
                 PathLogo.Margin = New Thickness(If(Height < 40, 6, 8), 8, If(Height < 40, 4, 6), 8)
@@ -344,7 +345,7 @@
             Return _Checked
         End Get
         Set(value As Boolean)
-            SetChecked(value, False, True)
+            SetChecked(value, False, value <> _Checked) '仅在值发生变化时触发动画 (#4596)
         End Set
     End Property
     ''' <summary>
@@ -366,31 +367,31 @@
                     RaiseEvent Changed(Me, ChangedEventArgs)
                     If ChangedEventArgs.Handled Then
                         _Checked = RawValue
-                        Exit Sub
+                        Return
                     End If
                 End If
                 _Checked = value
             Else
-                If value = _Checked Then Exit Sub
+                If value = _Checked Then Return
                 _Checked = value
                 If IsInitialized Then
                     RaiseEvent Changed(Me, ChangedEventArgs)
                     If ChangedEventArgs.Handled Then
                         _Checked = RawValue
-                        Exit Sub
+                        Return
                     End If
                 End If
             End If
             If value Then
                 Dim CheckEventArgs As New RouteEventArgs(user)
                 RaiseEvent Check(Me, CheckEventArgs)
-                If CheckEventArgs.Handled Then Exit Sub
+                If CheckEventArgs.Handled Then Return
             End If
 
             '保证只有一个单选 ListItem 选中
 
             If Type = CheckType.RadioBox Then
-                If IsNothing(Parent) Then Exit Sub
+                If IsNothing(Parent) Then Return
                 Dim RadioboxList As New List(Of MyListItem)
                 Dim CheckedCount As Integer = 0
                 '收集控件列表与选中个数
@@ -501,15 +502,15 @@
 
     '触发点击事件
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.PreviewMouseLeftButtonUp
-        If Not IsMouseDown Then Exit Sub
+        If Not IsMouseDown Then Return
         RaiseEvent Click(sender, e)
-        If e.Handled Then Exit Sub
+        If e.Handled Then Return
         '触发自定义事件
         If Not String.IsNullOrEmpty(EventType) Then
             ModEvent.TryStartEvent(EventType, EventData)
             e.Handled = True
         End If
-        If e.Handled Then Exit Sub
+        If e.Handled Then Return
         '实际的单击处理
         Select Case Type
             Case CheckType.Clickable
@@ -580,7 +581,7 @@
                 Time = 180
             End If
         End If
-        If StateLast = StateNew Then Exit Sub
+        If StateLast = StateNew Then Return
         StateLast = StateNew
         '触发颜色动画
         If IsLoaded AndAlso AniControlEnabled = 0 Then '防止默认属性变更触发动画
@@ -661,6 +662,8 @@
                 Dim Unused = New HelpEntry(GetEventAbsoluteUrls(EventData, EventType)(0)).SetToListItem(Me)
             Catch ex As Exception
                 Log(ex, "设置帮助 MyListItem 失败", LogLevel.Msgbox)
+                EventType = Nothing
+                EventData = Nothing
             End Try
         End If
     End Sub

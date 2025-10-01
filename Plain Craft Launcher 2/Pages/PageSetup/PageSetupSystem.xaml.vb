@@ -1,33 +1,5 @@
 ﻿Class PageSetupSystem
 
-#Region "语言"
-    'Private Sub PageSetupUI_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
-    '  AniControlEnabled -= 1
-
-    '  '读取设置
-    '  Select Case Lang
-    '      Case "zh_CN"
-    '          ComboLang.SelectedIndex = 0
-    '      Case "zh_HK"
-    '          ComboLang.SelectedIndex = 1
-    '      Case "en_US"
-    '          ComboLang.SelectedIndex = 2
-    '  End Select
-    '  CheckDebug.Checked = ReadReg("SystemDebugMode", "False")
-
-    '  AniControlEnabled += 1
-    'End Sub
-
-    'Private Sub RefreshLang() Handles ComboLang.SelectionChanged
-    '  If IsLoaded Then
-    '      If Not ComboLang.IsLoaded Then Exit Sub
-    '      Lang = CType(ComboLang.SelectedItem, MyComboBoxItem).Tag
-    '      Application.Current.Resources.MergedDictionaries(1) = New ResourceDictionary With {.Source = New Url("Languages\" & Lang & ".xaml", UrlKind.Relative)}
-    '      WriteReg("Lang", Lang)
-    '  End If
-    'End Sub
-#End Region
-
     Private Shadows IsLoaded As Boolean = False
 
     Private Sub PageSetupSystem_Loaded(sender As Object, e As RoutedEventArgs) Handles Me.Loaded
@@ -35,12 +7,15 @@
         '重复加载部分
         PanBack.ScrollToHome()
 
-#If Not BETA Then
+#If BETA Then
+        PanDonate.Visibility = Visibility.Collapsed
+#Else
+        PanDonate.Visibility = Visibility.Visible
         ItemSystemUpdateDownload.Content = "在有新版本时自动下载（更新快照版可能需要更新密钥）"
 #End If
 
         '非重复加载部分
-        If IsLoaded Then Exit Sub
+        If IsLoaded Then Return
         IsLoaded = True
 
         AniControlEnabled += 1
@@ -54,11 +29,15 @@
         '下载
         SliderDownloadThread.Value = Setup.Get("ToolDownloadThread")
         SliderDownloadSpeed.Value = Setup.Get("ToolDownloadSpeed")
+        ComboDownloadSource.SelectedIndex = Setup.Get("ToolDownloadSource")
         ComboDownloadVersion.SelectedIndex = Setup.Get("ToolDownloadVersion")
-        ComboDownloadTranslate.SelectedIndex = Setup.Get("ToolDownloadTranslate")
-        CheckDownloadKeepModpack.Checked = Setup.Get("ToolDownloadKeepModpack")
-        CheckDownloadIgnoreQuilt.Checked = Setup.Get("ToolDownloadIgnoreQuilt")
         CheckDownloadCert.Checked = Setup.Get("ToolDownloadCert")
+
+        'Mod 与整合包
+        ComboDownloadTranslateV2.SelectedIndex = Setup.Get("ToolDownloadTranslateV2")
+        ComboDownloadMod.SelectedIndex = Setup.Get("ToolDownloadMod")
+        ComboModLocalNameStyle.SelectedIndex = Setup.Get("ToolModLocalNameStyle")
+        CheckDownloadIgnoreQuilt.Checked = Setup.Get("ToolDownloadIgnoreQuilt")
 
         'Minecraft 更新提示
         CheckUpdateRelease.Checked = Setup.Get("ToolUpdateRelease")
@@ -71,6 +50,7 @@
         ComboSystemUpdate.SelectedIndex = Setup.Get("SystemSystemUpdate")
         ComboSystemActivity.SelectedIndex = Setup.Get("SystemSystemActivity")
         TextSystemCache.Text = Setup.Get("SystemSystemCache")
+        CheckSystemTelemetry.Checked = Setup.Get("SystemSystemTelemetry")
 
         '调试选项
         CheckDebugMode.Checked = Setup.Get("SystemDebugMode")
@@ -85,11 +65,13 @@
         Try
             Setup.Reset("ToolDownloadThread")
             Setup.Reset("ToolDownloadSpeed")
+            Setup.Reset("ToolDownloadSource")
             Setup.Reset("ToolDownloadVersion")
-            Setup.Reset("ToolDownloadTranslate")
-            Setup.Reset("ToolDownloadKeepModpack")
+            Setup.Reset("ToolDownloadTranslateV2")
             Setup.Reset("ToolDownloadIgnoreQuilt")
             Setup.Reset("ToolDownloadCert")
+            Setup.Reset("ToolDownloadMod")
+            Setup.Reset("ToolModLocalNameStyle")
             Setup.Reset("ToolUpdateRelease")
             Setup.Reset("ToolUpdateSnapshot")
             Setup.Reset("ToolHelpChinese")
@@ -100,6 +82,7 @@
             Setup.Reset("SystemSystemCache")
             Setup.Reset("SystemSystemUpdate")
             Setup.Reset("SystemSystemActivity")
+            Setup.Reset("SystemSystemTelemetry")
 
             Log("[Setup] 已初始化启动器页设置")
             Hint("已初始化启动器页设置！", HintType.Finish, False)
@@ -111,13 +94,13 @@
     End Sub
 
     '将控件改变路由到设置改变
-    Private Shared Sub CheckBoxChange(sender As MyCheckBox, e As Object) Handles CheckDebugMode.Change, CheckDebugDelay.Change, CheckDebugSkipCopy.Change, CheckUpdateRelease.Change, CheckUpdateSnapshot.Change, CheckHelpChinese.Change, CheckDownloadKeepModpack.Change, CheckDownloadIgnoreQuilt.Change, CheckDownloadCert.Change
+    Private Shared Sub CheckBoxChange(sender As MyCheckBox, e As Object) Handles CheckDebugMode.Change, CheckDebugDelay.Change, CheckDebugSkipCopy.Change, CheckUpdateRelease.Change, CheckUpdateSnapshot.Change, CheckHelpChinese.Change, CheckDownloadIgnoreQuilt.Change, CheckDownloadCert.Change, CheckSystemTelemetry.Change
         If AniControlEnabled = 0 Then Setup.Set(sender.Tag, sender.Checked)
     End Sub
     Private Shared Sub SliderChange(sender As MySlider, e As Object) Handles SliderDebugAnim.Change, SliderDownloadThread.Change, SliderDownloadSpeed.Change
         If AniControlEnabled = 0 Then Setup.Set(sender.Tag, sender.Value)
     End Sub
-    Private Shared Sub ComboChange(sender As MyComboBox, e As Object) Handles ComboDownloadVersion.SelectionChanged, ComboDownloadTranslate.SelectionChanged, ComboSystemUpdate.SelectionChanged, ComboSystemActivity.SelectionChanged
+    Private Shared Sub ComboChange(sender As MyComboBox, e As Object) Handles ComboDownloadVersion.SelectionChanged, ComboModLocalNameStyle.SelectionChanged, ComboDownloadTranslateV2.SelectionChanged, ComboSystemUpdate.SelectionChanged, ComboSystemActivity.SelectionChanged, ComboDownloadSource.SelectionChanged, ComboDownloadMod.SelectionChanged
         If AniControlEnabled = 0 Then Setup.Set(sender.Tag, sender.SelectedIndex)
     End Sub
     Private Shared Sub TextBoxChange(sender As MyTextBox, e As Object) Handles TextSystemCache.ValidatedTextChanged
@@ -143,7 +126,7 @@
         SliderDebugAnim.GetHintText = Function(v) If(v > 29, "关闭", (v / 10 + 0.1) & "x")
     End Sub
     Private Sub SliderDownloadThread_PreviewChange(sender As Object, e As RouteEventArgs) Handles SliderDownloadThread.PreviewChange
-        If SliderDownloadThread.Value < 100 Then Exit Sub
+        If SliderDownloadThread.Value < 100 Then Return
         If Not Setup.Get("HintDownloadThread") Then
             Setup.Set("HintDownloadThread", True)
             MyMsgBox("如果设置过多的下载线程，可能会导致下载时出现非常严重的卡顿。" & vbCrLf &
@@ -165,26 +148,24 @@
     End Sub
 
     '自动更新
-    Private Sub ComboSystemActivity_SizeChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboSystemActivity.SelectionChanged
-        If AniControlEnabled <> 0 Then Exit Sub
-        If ComboSystemActivity.SelectedIndex = 2 Then
-            If MyMsgBox("若选择此项，即使在将来出现严重问题时，你也无法获取相关通知。" & vbCrLf &
-                        "例如，如果发现某个版本游戏存在严重 Bug，你可能就会因为无法得到通知而导致无法预知的后果。" & vbCrLf & vbCrLf &
-                        "一般选择 仅在有重要通知时显示公告 就可以让你尽量不受打扰了。" & vbCrLf &
-                        "除非你在制作服务器整合包，或时常手动更新启动器，否则极度不推荐选择此项！", "警告", "我知道我在做什么", "取消", IsWarn:=True) = 2 Then
-                ComboSystemActivity.SelectedItem = e.RemovedItems(0)
-            End If
+    Private Sub ComboSystemActivity_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboSystemActivity.SelectionChanged
+        If AniControlEnabled <> 0 Then Return
+        If ComboSystemActivity.SelectedIndex <> 2 Then Return
+        If MyMsgBox("若选择此项，即使在将来出现严重问题时，你也无法获取相关通知。" & vbCrLf &
+                    "例如，如果发现某个版本游戏存在严重 Bug，你可能就会因为无法得到通知而导致无法预知的后果。" & vbCrLf & vbCrLf &
+                    "一般选择 仅在有重要通知时显示公告 就可以让你尽量不受打扰了。" & vbCrLf &
+                    "除非你在制作服务器整合包，或时常手动更新启动器，否则极度不推荐选择此项！", "警告", "我知道我在做什么", "取消", IsWarn:=True) = 2 Then
+            ComboSystemActivity.SelectedItem = e.RemovedItems(0)
         End If
     End Sub
-    Private Sub ComboSystemUpdate_SizeChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboSystemUpdate.SelectionChanged
-        If AniControlEnabled <> 0 Then Exit Sub
-        If ComboSystemUpdate.SelectedIndex = 3 Then
-            If MyMsgBox("若选择此项，即使在启动器将来出现严重问题时，你也无法获取更新并获得修复。" & vbCrLf &
-                        "例如，如果官方修改了登录方式，从而导致现有启动器无法登录，你可能就会因为无法更新而无法开始游戏。" & vbCrLf & vbCrLf &
-                        "一般选择 仅在有重大漏洞更新时显示提示 就可以让你尽量不受打扰了。" & vbCrLf &
-                        "除非你在制作服务器整合包，或时常手动更新启动器，否则极度不推荐选择此项！", "警告", "我知道我在做什么", "取消", IsWarn:=True) = 2 Then
-                ComboSystemUpdate.SelectedItem = e.RemovedItems(0)
-            End If
+    Private Sub ComboSystemUpdate_SelectionChanged(sender As Object, e As SelectionChangedEventArgs) Handles ComboSystemUpdate.SelectionChanged
+        If AniControlEnabled <> 0 Then Return
+        If ComboSystemUpdate.SelectedIndex <> 3 Then Return
+        If MyMsgBox("若选择此项，即使在启动器将来出现严重问题时，你也无法获取更新并获得修复。" & vbCrLf &
+                    "例如，如果官方修改了登录方式，从而导致现有启动器无法登录，你可能就会因为无法更新而无法开始游戏。" & vbCrLf & vbCrLf &
+                    "一般选择 仅在有重大漏洞更新时显示提示 就可以让你尽量不受打扰了。" & vbCrLf &
+                    "除非你在制作服务器整合包，或时常手动更新启动器，否则极度不推荐选择此项！", "警告", "我知道我在做什么", "取消", IsWarn:=True) = 2 Then
+            ComboSystemUpdate.SelectedItem = e.RemovedItems(0)
         End If
     End Sub
     Private Sub BtnSystemUpdate_Click(sender As Object, e As EventArgs) Handles BtnSystemUpdate.Click
@@ -211,5 +192,16 @@
             Return Nothing
         End Try
     End Function
+
+#Region "导出 / 导入设置"
+
+    Private Sub BtnSystemSettingExp_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnSystemSettingExp.Click
+        Hint("该功能尚在开发中！")
+    End Sub
+    Private Sub BtnSystemSettingImp_Click(sender As Object, e As MouseButtonEventArgs) Handles BtnSystemSettingImp.Click
+        Hint("该功能尚在开发中！")
+    End Sub
+
+#End Region
 
 End Class

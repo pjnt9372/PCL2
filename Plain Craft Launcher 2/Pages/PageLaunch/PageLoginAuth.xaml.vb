@@ -17,8 +17,8 @@
                 ComboName.ItemsSource = Nothing
             Else
                 ComboName.ItemsSource = Setup.Get("LoginAuthEmail").ToString.Split("¨")
-                ComboName.Text = Setup.Get("LoginAuthEmail").ToString.Before("¨")
-                If Setup.Get("LoginRemember") Then TextPass.Password = Setup.Get("LoginAuthPass").ToString.Before("¨").Trim
+                ComboName.Text = Setup.Get("LoginAuthEmail").ToString.BeforeFirst("¨")
+                If Setup.Get("LoginRemember") Then TextPass.Password = Setup.Get("LoginAuthPass").ToString.BeforeFirst("¨").Trim
             End If
         End If
         IsFirstLoad = False
@@ -71,9 +71,9 @@
     End Sub
     Private Sub Btn_Click(sender As Object, e As EventArgs) Handles BtnLink.Click
         If BtnLink.Content = "注册账号" Then
-            OpenWebsite(If(McVersionCurrent Is Nothing, Setup.Get("VersionServerAuthRegister", Version:=McVersionCurrent), Setup.Get("CacheAuthServerRegister")))
+            OpenWebsite(If(McVersionCurrent IsNot Nothing, Setup.Get("VersionServerAuthRegister", Version:=McVersionCurrent), Setup.Get("CacheAuthServerRegister")))
         Else
-            Dim Website As String = If(McVersionCurrent Is Nothing, Setup.Get("VersionServerAuthRegister", Version:=McVersionCurrent), Setup.Get("CacheAuthServerRegister"))
+            Dim Website As String = If(McVersionCurrent IsNot Nothing, Setup.Get("VersionServerAuthRegister", Version:=McVersionCurrent), Setup.Get("CacheAuthServerRegister"))
             OpenWebsite(Website.Replace("/auth/register", "/auth/forgot"))
         End If
     End Sub

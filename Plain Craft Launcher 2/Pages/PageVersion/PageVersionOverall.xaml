@@ -4,7 +4,7 @@
     xmlns:local="clr-namespace:PCL" xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
     xmlns:System="clr-namespace:System;assembly=mscorlib" 
     mc:Ignorable="d" x:Class="PageVersionOverall"
-    PanScroll="{Binding ElementName=PanBack}" Grid.IsSharedSizeScope="True">
+    PanScroll="PanBack" Grid.IsSharedSizeScope="True">
     <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
         <StackPanel x:Name="PanMain" Margin="25,10">
             <local:MyCard Margin="0,15" Title="">
@@ -30,13 +30,14 @@
                             <local:MyComboBoxItem Content="命令方块" Tag="pack://application:,,,/images/Blocks/CommandBlock.png" />
                             <local:MyComboBoxItem Content="金块" Tag="pack://application:,,,/images/Blocks/GoldBlock.png" />
                             <local:MyComboBoxItem Content="草方块" Tag="pack://application:,,,/images/Blocks/Grass.png" />
-                            <local:MyComboBoxItem Content="草径" Tag="pack://application:,,,/images/Blocks/GrassPath.png" />
+                            <local:MyComboBoxItem Content="土径" Tag="pack://application:,,,/images/Blocks/GrassPath.png" />
                             <local:MyComboBoxItem Content="铁砧" Tag="pack://application:,,,/images/Blocks/Anvil.png" />
                             <local:MyComboBoxItem Content="红石块" Tag="pack://application:,,,/images/Blocks/RedstoneBlock.png" />
                             <local:MyComboBoxItem Content="红石灯（开）" Tag="pack://application:,,,/images/Blocks/RedstoneLampOn.png" />
                             <local:MyComboBoxItem Content="红石灯（关）" Tag="pack://application:,,,/images/Blocks/RedstoneLampOff.png" />
                             <local:MyComboBoxItem Content="鸡蛋" Tag="pack://application:,,,/images/Blocks/Egg.png" />
                             <local:MyComboBoxItem Content="布料（Fabric）" Tag="pack://application:,,,/images/Blocks/Fabric.png" />
+                            <local:MyComboBoxItem Content="狐狸（NeoForge）" Tag="pack://application:,,,/images/Blocks/NeoForge.png" />
                         </local:MyComboBox>
                         <TextBlock VerticalAlignment="Center" Grid.Row="2" HorizontalAlignment="Left" Text="分类" Margin="0,0,25,0" />
                         <local:MyComboBox Grid.Column="1" Grid.Row="2" x:Name="ComboDisplayType">

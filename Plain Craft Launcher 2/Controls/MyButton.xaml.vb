@@ -1,22 +1,30 @@
-﻿Public Class MyButton
+﻿Imports System.Windows.Markup
+
+<ContentProperty("Inlines")>
+Public Class MyButton
 
     '声明
     Public Event Click(sender As Object, e As MouseButtonEventArgs) '自定义事件
 
     '自定义属性
     Public Uuid As Integer = GetUuid()
+    Public ReadOnly Property Inlines As InlineCollection
+        Get
+            Return LabText.Inlines
+        End Get
+    End Property
     Public Property Text As String
         Get
-            Return LabText.Text
+            Return GetValue(TextProperty)
         End Get
         Set(value As String)
-            LabText.Text = value
+            SetValue(TextProperty, value)
         End Set
     End Property '显示文本
     Public Shared ReadOnly TextProperty As DependencyProperty = DependencyProperty.Register("Text", GetType(String), GetType(MyButton), New PropertyMetadata(New PropertyChangedCallback(
-                                                                                                                                                               Sub(sender As DependencyObject, e As DependencyPropertyChangedEventArgs)
-                                                                                                                                                                   If Not IsNothing(sender) Then CType(sender, MyButton).LabText.Text = e.NewValue
-                                                                                                                                                               End Sub)))
+    Sub(sender As DependencyObject, e As DependencyPropertyChangedEventArgs)
+        If sender IsNot Nothing Then CType(sender, MyButton).LabText.Text = e.NewValue
+    End Sub)))
     Public Property TextPadding As Thickness
         Get
             Return LabText.Padding
@@ -134,7 +142,7 @@
 
     '实现自定义事件
     Private Sub Button_MouseUp(sender As Object, e As MouseButtonEventArgs) Handles Me.MouseLeftButtonUp
-        If Not IsMouseDown Then Exit Sub
+        If Not IsMouseDown Then Return
         Log("[Control] 按下按钮：" & Text)
         RaiseEvent Click(sender, e)
         If Not String.IsNullOrEmpty(Tag) Then
@@ -177,7 +185,7 @@
         AniStart(AaColor(PanFore, BackgroundProperty, If(_ColorType = ColorState.Red, "ColorBrushRedBack", "ColorBrush7"), AnimationColorIn), "MyButton Background " & Uuid)
     End Sub
     Private Sub Button_MouseUp() Handles Me.MouseLeftButtonUp
-        If Not IsMouseDown Then Exit Sub
+        If Not IsMouseDown Then Return
         IsMouseDown = False
         AniStart({
                AaScaleTransform(PanFore, 1 - CType(PanFore.RenderTransform, ScaleTransform).ScaleX, 300, 10, New AniEaseOutFluent(AniEasePower.Middle))
@@ -185,7 +193,7 @@
     End Sub
     Private Sub Button_MouseLeave() Handles Me.MouseLeave
         AniStart(AaColor(PanFore, BackgroundProperty, "ColorBrushHalfWhite", AnimationColorOut), "MyButton Background " & Uuid)
-        If Not IsMouseDown Then Exit Sub
+        If Not IsMouseDown Then Return
         IsMouseDown = False
         AniStart(AaScaleTransform(PanFore, 1 - CType(PanFore.RenderTransform, ScaleTransform).ScaleX, 800,, New AniEaseOutFluent(AniEasePower.Strong)), "MyButton Scale " & Uuid)
     End Sub

@@ -34,12 +34,12 @@ Public Module ModMain
     ''' <summary>
     ''' 等待弹出的提示列表。以 {String, HintType, Log As Boolean} 形式存储为数组。
     ''' </summary>
-    Private HintWaiting As List(Of HintMessage) = If(HintWaiting, New List(Of HintMessage))
+    Private HintWaiting As SafeList(Of HintMessage) = If(HintWaiting, New SafeList(Of HintMessage))
     ''' <summary>
     ''' 在窗口左下角弹出提示文本。
     ''' </summary>
     Public Sub Hint(Text As String, Optional Type As HintType = HintType.Info, Optional Log As Boolean = True)
-        If HintWaiting Is Nothing Then HintWaiting = New List(Of HintMessage)
+        If HintWaiting Is Nothing Then HintWaiting = New SafeList(Of HintMessage)
         HintWaiting.Add(New HintMessage With {.Text = If(Text, ""), .Type = Type, .Log = Log})
     End Sub
 
@@ -47,7 +47,7 @@ Public Module ModMain
         Try
 
             'Tag 存储了：{ 是否可以重用, Uuid }
-            If Not HintWaiting.Any() Then Exit Sub
+            If Not HintWaiting.Any() Then Return
             Do While HintWaiting.Any
                 ''清除空提示
                 'If IsNothing(HintWaiting(0)) OrElse IsNothing(HintWaiting(0)(0)) Then
@@ -69,14 +69,14 @@ Public Module ModMain
                 Dim Percent As Double = 0.3
                 Select Case CurrentHint.Type
                     Case HintType.Info
-                        TargetColor0 = New MyColor(37, 155, 252)
-                        TargetColor1 = New MyColor(10, 142, 252)
+                        TargetColor0 = New MyColor(215, 37, 155, 252)
+                        TargetColor1 = New MyColor(215, 10, 142, 252)
                     Case HintType.Finish
-                        TargetColor0 = New MyColor(33, 177, 33)
-                        TargetColor1 = New MyColor(29, 160, 29)
+                        TargetColor0 = New MyColor(215, 33, 177, 33)
+                        TargetColor1 = New MyColor(215, 29, 160, 29)
                     Case Else 'HintType.Critical
-                        TargetColor0 = New MyColor(255, 53, 11)
-                        TargetColor1 = New MyColor(255, 43, 0)
+                        TargetColor0 = New MyColor(215, 255, 53, 11)
+                        TargetColor1 = New MyColor(215, 255, 43, 0)
                 End Select
                 If Not IsNothing(DoubleStack) Then
                     '有重复提示，且该提示的进入动画已播放
@@ -176,15 +176,17 @@ EndHint:
         Public Title As String
         Public Text As String
         ''' <summary>
-        ''' 输入框模式：文本框的文本；选择模式：需要放进去的 List(Of MyListItem)。
+        ''' 输入模式：文本框的文本。
+        ''' 选择模式：需要放进去的 List(Of MyListItem)。
+        ''' 登录模式：登录步骤 1 中返回的 JSON。
         ''' </summary>
         Public Content As Object
         ''' <summary>
-        ''' 仅输入框模式：输入验证规则。
+        ''' 输入模式：输入验证规则。
         ''' </summary>
         Public ValidateRules As ObjectModel.Collection(Of Validate)
         ''' <summary>
-        ''' 仅输入框模式：提示文本。
+        ''' 输入模式：提示文本。
         ''' </summary>
         Public HintText As String = ""
         ''' <summary>
@@ -214,7 +216,9 @@ EndHint:
         ''' </summary>
         Public IsExited As Boolean = False
         ''' <summary>
-        ''' 点击的按钮编号或输入的文本。若输入弹窗点击了非第一个按钮，则为 Nothing。
+        ''' 输入模式：输入的文本。若点击了 非 第一个按钮，则为 Nothing。
+        ''' 选择模式：点击的按钮编号，从 1 开始。
+        ''' 登录模式：字符串数组 {AccessToken, RefreshToken} 或一个 Exception。
         ''' </summary>
         Public Result As Object
     End Class
@@ -222,6 +226,7 @@ EndHint:
         Text
         [Select]
         Input
+        Login
     End Enum
 
     ''' <summary>
@@ -338,7 +343,7 @@ EndHint:
     Public WaitingMyMsgBox As List(Of MyMsgBoxConverter) = If(WaitingMyMsgBox, New List(Of MyMsgBoxConverter))
     Public Sub MyMsgBoxTick()
         Try
-            If FrmMain Is Nothing OrElse FrmMain.PanMsg Is Nothing OrElse FrmMain.WindowState = WindowState.Minimized Then Exit Sub
+            If FrmMain Is Nothing OrElse FrmMain.PanMsg Is Nothing OrElse FrmMain.WindowState = WindowState.Minimized Then Return
             If FrmMain.PanMsg.Children.Count > 0 Then
                 '弹窗中
                 FrmMain.PanMsg.Visibility = Visibility.Visible
@@ -352,6 +357,8 @@ EndHint:
                         FrmMain.PanMsg.Children.Add(New MyMsgSelect(WaitingMyMsgBox(0)))
                     Case MyMsgBoxType.Text
                         FrmMain.PanMsg.Children.Add(New MyMsgText(WaitingMyMsgBox(0)))
+                    Case MyMsgBoxType.Login
+                        FrmMain.PanMsg.Children.Add(New MyMsgLogin(WaitingMyMsgBox(0)))
                 End Select
                 WaitingMyMsgBox.RemoveAt(0)
             Else
@@ -390,13 +397,11 @@ EndHint:
     '下载页面声明
     Public FrmDownloadLeft As PageDownloadLeft
     Public FrmDownloadInstall As PageDownloadInstall
-    Public FrmDownloadClient As PageDownloadClient
-    Public FrmDownloadOptiFine As PageDownloadOptiFine
-    Public FrmDownloadLiteLoader As PageDownloadLiteLoader
-    Public FrmDownloadForge As PageDownloadForge
-    Public FrmDownloadFabric As PageDownloadFabric
     Public FrmDownloadMod As PageDownloadMod
     Public FrmDownloadPack As PageDownloadPack
+    Public FrmDownloadDataPack As PageDownloadDataPack
+    Public FrmDownloadShader As PageDownloadShader
+    Public FrmDownloadResourcePack As PageDownloadResourcePack
 
     '设置页面声明
     Public FrmSetupLeft As PageSetupLeft
@@ -426,6 +431,7 @@ EndHint:
     Public FrmVersionMod As PageVersionMod
     Public FrmVersionModDisabled As PageVersionModDisabled
     Public FrmVersionSetup As PageVersionSetup
+    Public FrmVersionExport As PageVersionExport
 
     '资源信息分页声明
     Public FrmDownloadCompDetail As PageDownloadCompDetail
@@ -435,6 +441,10 @@ EndHint:
 #Region "帮助"
 
     Public Class HelpEntry
+        ''' <summary>
+        ''' 原始信息路径。用于刷新。
+        ''' </summary>
+        Public RawPath As String
 
         '基础
 
@@ -493,6 +503,7 @@ EndHint:
         ''' 从文件初始化 HelpEntry 对象，失败会抛出异常。
         ''' </summary>
         Public Sub New(FilePath As String)
+            RawPath = FilePath
             Dim JsonData As JObject = GetJson(HelpArgumentReplace(ReadFile(FilePath)))
             If JsonData Is Nothing Then Throw New FileNotFoundException("未找到帮助文件：" & FilePath, FilePath)
             '加载常规信息
@@ -590,7 +601,7 @@ EndHint:
                                     '加载忽略列表
                                     Log("[Help] 发现 .helpignore 文件：" & File.FullName)
                                     For Each Line In ReadFile(File.FullName).Split(vbCrLf.ToCharArray)
-                                        Dim RealString As String = Line.Before("#").Trim
+                                        Dim RealString As String = Line.BeforeFirst("#").Trim
                                         If String.IsNullOrWhiteSpace(RealString) Then Continue For
                                         IgnoreList.Add(RealString)
                                         If ModeDebug Then Log("[Help]  > " & RealString)
@@ -620,7 +631,7 @@ NextFile:
                 Catch ex As Exception
                     Log(ex, "检查帮助文件夹失败", LogLevel.Msgbox)
                 End Try
-                If Loader.IsAborted Then Exit Sub
+                If Loader.IsAborted Then Return
 
                 '将文件实例化
                 Dim Dict As New List(Of HelpEntry)
@@ -636,7 +647,7 @@ NextFile:
 
                 '回设
                 If Not Dict.Any() Then Throw New Exception("未找到可用的帮助；若不需要帮助页面，可以在 设置 → 个性化 → 功能隐藏 中将其隐藏")
-                If Loader.IsAborted Then Exit Sub
+                If Loader.IsAborted Then Return
                 Loader.Output = Dict
 
             Catch ex As Exception
@@ -663,8 +674,8 @@ NextFile:
     ''' </summary>
     Public Function HelpArgumentReplace(Xaml As String) As String
         Dim Result = Xaml.Replace("{path}", EscapeXML(Path))
-        Result = RegexReplaceEach(Result, Function() EscapeXML(PageOtherTest.GetRandomHint()), "\{hint\}")
-        Result = RegexReplaceEach(Result, Function() EscapeXML(PageOtherTest.GetRandomCave()), "\{cave\}")
+        Result = Result.RegexReplaceEach("\{hint\}", Function() EscapeXML(PageOtherTest.GetRandomHint()))
+        Result = Result.RegexReplaceEach("\{cave\}", Function() EscapeXML(PageOtherTest.GetRandomCave()))
         Return Result
     End Function
 
@@ -679,8 +690,8 @@ NextFile:
     Private AprilDistance As Integer = 0
     Private Sub TimerFool()
         Try
-            If FrmLaunchLeft Is Nothing OrElse FrmLaunchLeft.AprilPosTrans Is Nothing OrElse FrmMain.lastMouseArg Is Nothing Then Exit Sub
-            If IsAprilGiveup OrElse FrmMain.PageCurrent <> FormMain.PageType.Launch OrElse AniControlEnabled <> 0 OrElse Not FrmLaunchLeft.BtnLaunch.IsLoaded Then Exit Sub
+            If FrmLaunchLeft Is Nothing OrElse FrmLaunchLeft.AprilPosTrans Is Nothing OrElse FrmMain.lastMouseArg Is Nothing Then Return
+            If IsAprilGiveup OrElse FrmMain.PageCurrent <> FormMain.PageType.Launch OrElse AniControlEnabled <> 0 OrElse Not FrmLaunchLeft.BtnLaunch.IsLoaded Then Return
 
             '计算是否空闲
             Dim MousePos = FrmMain.lastMouseArg.GetPosition(FrmMain)
@@ -749,7 +760,7 @@ NextFile:
             '移动
             AprilSpeed = AprilSpeed * 0.8 + Acc
             Dim SpeedValue = Math.Min(60, AprilSpeed.Length)
-            If SpeedValue < 0.01 Then Exit Sub
+            If SpeedValue < 0.01 Then Return
             AprilSpeed.Normalize()
             AprilSpeed *= SpeedValue
             AprilDistance += SpeedValue
@@ -797,6 +808,90 @@ NextFile:
     Public Declare Function SetForegroundWindow Lib "user32" (hWnd As IntPtr) As Integer
     Private Declare Function PostMessage Lib "user32" Alias "PostMessageA" (hWnd As IntPtr, msg As UInteger, wParam As Long, lParam As Long) As Boolean
 
+    ''' <summary>
+    ''' 将特定程序设置为使用高性能显卡启动。
+    ''' 如果失败，则抛出异常。
+    ''' </summary>
+    Public Sub SetGPUPreference(Executeable As String)
+        Const REG_KEY As String = "Software\Microsoft\DirectX\UserGpuPreferences"
+        Const REG_VALUE As String = "GpuPreference=2;"
+        '查看现有设置
+        Using ReadOnlyKey = My.Computer.Registry.CurrentUser.OpenSubKey(REG_KEY, False)
+            If ReadOnlyKey IsNot Nothing Then
+                Dim CurrentValue = ReadOnlyKey.GetValue(Executeable)
+                If REG_VALUE = CurrentValue?.ToString() Then
+                    Log($"[System] 无需调整显卡设置：{Executeable}")
+                    Return
+                End If
+            Else
+                '创建父级键
+                Log($"[System] 需要创建显卡设置的父级键")
+                My.Computer.Registry.CurrentUser.CreateSubKey(REG_KEY)
+            End If
+        End Using
+        '写入新设置
+        Using WriteKey = My.Computer.Registry.CurrentUser.OpenSubKey(REG_KEY, True)
+            WriteKey.SetValue(Executeable, REG_VALUE)
+            Log($"[System] 已调整显卡设置：{Executeable}")
+        End Using
+    End Sub
+
+#End Region
+
+#Region "任务缓存"
+
+    Private IsTaskTempCleared As Boolean = False
+    Private IsTaskTempClearing As Boolean = False
+
+    ''' <summary>
+    ''' 尝试清理任务缓存文件夹。
+    ''' 在整次运行中只会实际清理一次。
+    ''' </summary>
+    Public Sub TryClearTaskTemp()
+        If Not IsTaskTempCleared Then
+            IsTaskTempCleared = True
+            IsTaskTempClearing = True
+            Try
+                Log("[System] 开始清理任务缓存文件夹")
+                DeleteDirectory($"{OsDrive}ProgramData\PCL\TaskTemp\")
+                DeleteDirectory($"{PathTemp}TaskTemp\")
+                Log("[System] 已清理任务缓存文件夹")
+            Catch ex As Exception
+                Log(ex, "清理任务缓存文件夹失败")
+            Finally
+                IsTaskTempClearing = False
+            End Try
+        ElseIf IsTaskTempClearing Then
+            '等待另一个清理步骤完成
+            Do While IsTaskTempClearing
+                Thread.Sleep(1)
+            Loop
+        End If
+    End Sub
+
+    ''' <summary>
+    ''' 申请一个可用于任务缓存的临时文件夹，以 \ 结尾。这些文件夹无需进行后续清理。
+    ''' 若所有缓存位置均没有权限，会抛出异常。
+    ''' </summary>
+    ''' <param name="RequireNonSpace">是否要求路径不包含空格。</param>
+    Public Function RequestTaskTempFolder(Optional RequireNonSpace As Boolean = False) As String
+        TryClearTaskTemp()
+        Dim ResultFolder As String
+        Try
+            ResultFolder = $"{PathTemp}TaskTemp\{GetUuid()}-{RandomInteger(0, 1000000)}\"
+            If RequireNonSpace AndAlso ResultFolder.Contains(" ") Then Exit Try '带空格
+            Directory.CreateDirectory(ResultFolder)
+            CheckPermissionWithException(ResultFolder)
+            Return ResultFolder
+        Catch
+        End Try
+        '使用备用路径
+        ResultFolder = $"{OsDrive}ProgramData\PCL\TaskTemp\{GetUuid()}-{RandomInteger(0, 1000000)}\"
+        Directory.CreateDirectory(ResultFolder)
+        CheckPermission(ResultFolder)
+        Return ResultFolder
+    End Function
+
 #End Region
 
     Public DragControl = Nothing
@@ -812,7 +907,7 @@ NextFile:
             If ThemeDontClick = 2 Then ThemeRefresh()
 #End Region
         Catch ex As Exception
-            Log(ex, "短程主时钟执行异常", LogLevel.Assert)
+            Log(ex, "短程主时钟执行异常", LogLevel.Critical)
         End Try
         Timer4Count += 1
         If Timer4Count = 4 Then
@@ -832,15 +927,16 @@ NextFile:
 #Region "每 7.5s 执行一次的代码"
                 If FrmMain.BtnExtraApril_ShowCheck AndAlso AprilDistance <> 0 Then FrmMain.BtnExtraApril.Ribble()
                 '以未知原因窗口被丢到一边去的修复（Top、Left = -25600），还有 #745
-                RunInUi(Sub()
-                            If Not FrmMain.Hidden Then
-                                If FrmMain.Top < -9000 Then FrmMain.Top = 100
-                                If FrmMain.Left < -9000 Then FrmMain.Left = 100 '窗口拉至最大时 Left = -18.8
-                            End If
-                        End Sub)
+                RunInUi(
+                Sub()
+                    If Not FrmMain.Hidden Then
+                        If FrmMain.Top < -9000 Then FrmMain.Top = 100
+                        If FrmMain.Left < -9000 Then FrmMain.Left = 100 '窗口拉至最大时 Left = -18.8
+                    End If
+                End Sub)
 #End Region
             Catch ex As Exception
-                Log(ex, "长程主时钟执行异常", LogLevel.Assert)
+                Log(ex, "长程主时钟执行异常", LogLevel.Critical)
             End Try
         End If
     End Sub
@@ -856,7 +952,7 @@ NextFile:
                 Log(ex, "程序主时钟出错", LogLevel.Feedback)
             End Try
         End Sub, "Timer Main")
-        If Not IsAprilEnabled Then Exit Sub
+        If Not IsAprilEnabled Then Return
         RunInNewThread(
         Sub()
             Try

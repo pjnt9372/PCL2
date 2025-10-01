@@ -1,7 +1,7 @@
 ﻿Public Module ModEvent
 
     Public Sub TryStartEvent(Type As String, Data As String)
-        If String.IsNullOrWhiteSpace(Type) Then Exit Sub
+        If String.IsNullOrWhiteSpace(Type) Then Return
         Dim RealData As String() = {""}
         If Data IsNot Nothing Then RealData = Data.Split("|")
         StartEvent(Type, RealData)
@@ -15,34 +15,54 @@
                     Data(0) = Data(0).Replace("\", "/")
                     If Not Data(0).Contains("://") OrElse Data(0).StartsWithF("file", True) Then '为了支持更多协议（#2200）
                         MyMsgBox("EventData 必须为一个网址。" & vbCrLf & "如果想要启动程序，请将 EventType 改为 打开文件。", "事件执行失败")
-                        Exit Sub
+                        Return
                     End If
                     Hint("正在开启中，请稍候……")
                     OpenWebsite(Data(0))
 
-                Case "打开文件", "打开帮助"
-                    RunInThread(Sub()
-                                    Try
-                                        '确认实际路径
-                                        Dim ActualPaths = GetEventAbsoluteUrls(Data(0), Type)
-                                        Dim Location = ActualPaths(0), WorkingDir = ActualPaths(1)
-                                        '执行
-                                        If Type = "打开文件" Then
-                                            Dim Info As New ProcessStartInfo With {
-                                                .Arguments = If(Data.Length >= 2, Data(1), ""),
-                                                .FileName = Location,
-                                                .WorkingDirectory = WorkingDir
-                                            }
-                                            Process.Start(Info)
-                                        Else '打开帮助
-                                            PageOtherHelp.EnterHelpPage(Location)
-                                        End If
-                                    Catch ex As Exception
-                                        Log(ex, "执行打开类自定义事件失败", LogLevel.Msgbox)
-                                    End Try
-                                End Sub)
+                Case "打开文件", "打开帮助", "执行命令"
+                    RunInThread(
+                    Sub()
+                        Try
+                            '确认实际路径
+                            Dim ActualPaths = GetEventAbsoluteUrls(Data(0), Type)
+                            Dim Location = ActualPaths(0), WorkingDir = ActualPaths(1)
+                            Log($"[Control] 打开类自定义事件实际路径：{Location}，工作目录：{WorkingDir}")
+                            '执行
+                            If Type = "打开帮助" Then
+                                PageOtherHelp.EnterHelpPage(Location)
+                            Else
+                                If Not Setup.Get("HintCustomCommand") Then
+                                    Select Case MyMsgBox(
+                                    "即将执行：" & Location & If(Data.Length >= 2, " " & Data(1), "") & vbCrLf &
+                                    "请在确认该操作没有安全隐患后继续。", "执行确认", "继续", "继续且今后不再要求确认", "取消")
+                                        Case 2
+                                            Setup.Set("HintCustomCommand", True)
+                                        Case 3
+                                            Return
+                                    End Select
+                                End If
+                                Dim Info As New ProcessStartInfo With {
+                                    .Arguments = If(Data.Length >= 2, Data(1), ""),
+                                    .FileName = Location,
+                                    .WorkingDirectory = WorkingDir
+                                }
+                                StartProcess(Info)
+                            End If
+                        Catch ex As Exception
+                            Log(ex, "执行打开类自定义事件失败", LogLevel.Msgbox)
+                        End Try
+                    End Sub)
 
                 Case "启动游戏"
+                    If Data(0) = "\current" Then
+                        If McVersionCurrent Is Nothing Then
+                            Hint("请先选择一个 Minecraft 版本！", HintType.Critical)
+                            Return
+                        Else
+                            Data(0) = McVersionCurrent.Name
+                        End If
+                    End If
                     If McLaunchStart(New McLaunchOptions With
                                      {.ServerIp = If(Data.Length >= 2, Data(1), Nothing), .Version = New McVersion(Data(0))}) Then
                         Hint("正在启动 " & Data(0) & "……")
@@ -80,9 +100,24 @@
                     Data(0) = Data(0).Replace("\", "/")
                     If Not (Data(0).StartsWithF("http://", True) OrElse Data(0).StartsWithF("https://", True)) Then
                         MyMsgBox("EventData 必须为以 http:// 或 https:// 开头的网址。" & vbCrLf & "PCL 不支持其他乱七八糟的下载协议。", "事件执行失败")
-                        Exit Sub
+                        Return
                     End If
-                    PageOtherTest.StartCustomDownload(Data(0), GetFileNameFromPath(Data(0)))
+                    Try
+                        Select Case Data.Length
+                            Case 1
+                                PageOtherTest.StartCustomDownload(Data(0), GetFileNameFromPath(Data(0)))
+                            Case 2
+                                PageOtherTest.StartCustomDownload(Data(0), Data(1))
+                            Case Else
+                                PageOtherTest.StartCustomDownload(Data(0), Data(1), Data(2))
+                        End Select
+                    Catch
+                        PageOtherTest.StartCustomDownload(Data(0), "未知")
+                    End Try
+
+                Case "修改设置"
+                    Setup.Set(Data(0), Data(1))
+                    Hint($"已写入设置：{Data(0)} → {Data(1)}", HintType.Finish)
 
                 Case Else
                     MyMsgBox("未知的事件类型：" & Type & vbCrLf & "请检查事件类型填写是否正确，或者 PCL 是否为最新版本。", "事件执行失败")
@@ -115,13 +150,11 @@
                                     " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
             End Try
             '下载文件
-            Dim LocalTemp1 As String = PathTemp & "CustomEvent\" & RawFileName
-            Dim LocalTemp2 As String = PathTemp & "CustomEvent\" & RawFileName.Replace(".json", ".xaml")
-            Log("[Event] 转换网络资源：" & RelativeUrl & " -> " & LocalTemp1)
-            Hint("正在获取资源，请稍候……")
+            Dim LocalTemp As String = RequestTaskTempFolder() & RawFileName
+            Log("[Event] 转换网络资源：" & RelativeUrl & " -> " & LocalTemp)
             Try
-                NetDownload(RelativeUrl, LocalTemp1)
-                NetDownload(RelativeUrl.Replace(".json", ".xaml"), LocalTemp1.Replace(".json", ".xaml"))
+                NetDownloadByClient(RelativeUrl, LocalTemp)
+                NetDownloadByClient(RelativeUrl.Replace(".json", ".xaml"), LocalTemp.Replace(".json", ".xaml"))
             Catch ex As Exception
                 Throw New Exception("下载指定的文件失败！" & vbCrLf &
                                     "注意，联网帮助页面须指向一个帮助 JSON 文件，并在同路径下包含相应 XAML 文件！" & vbCrLf &
@@ -129,7 +162,7 @@
                                     " - https://www.baidu.com/test.json（填写这个路径）" & vbCrLf &
                                     " - https://www.baidu.com/test.xaml（同时也需要包含这个文件）", ex)
             End Try
-            RelativeUrl = LocalTemp1
+            RelativeUrl = LocalTemp
         End If
         RelativeUrl = RelativeUrl.Replace("/", "\").ToLower.TrimStart("\")
 
@@ -154,7 +187,7 @@
             Location = PathTemp & "Help\" & RelativeUrl
             WorkingDir = PathTemp & "Help\"
             Log("[Control] 自定义事件中由相对 PCL 自带帮助文件夹的路径" & EventType & "：" & Location)
-        ElseIf EventType = "打开文件" Then
+        ElseIf EventType = "打开文件" OrElse EventType = "执行命令" Then
             '直接使用原有路径启动程序
             Location = RelativeUrl
             Log("[Control] 自定义事件中直接" & EventType & "：" & Location)

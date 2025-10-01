@@ -25,14 +25,15 @@
             Next
         End If
 
+        AniControlEnabled += 1
+        Reload() '#4826，在每次进入页面时都刷新一下
+        AniControlEnabled -= 1
+
         '非重复加载部分
-        If IsLoaded Then Exit Sub
+        If IsLoaded Then Return
         IsLoaded = True
 
-        AniControlEnabled += 1
         SliderLoad()
-        Reload()
-        AniControlEnabled -= 1
 
 #If BETA Then
         PanLauncherHide.Visibility = Visibility.Visible
@@ -41,8 +42,8 @@
         '设置解锁
         If Not RadioLauncherTheme8.IsEnabled Then LabLauncherTheme8Copy.ToolTip = "累积赞助达到 ¥23.33 后，在爱发电私信发送【解锁码】以解锁。" & vbCrLf & "右键打开赞助页面，如果觉得 PCL 做得还不错就支持一下吧 =w=！"
         RadioLauncherTheme8.ToolTip = "累积赞助达到 ¥23.33 后，在爱发电私信发送【解锁码】以解锁"
-        If Not RadioLauncherTheme9.IsEnabled Then LabLauncherTheme9Copy.ToolTip = "· 反馈一个 Bug，在 Issue 标记为 [已完成] 后回复 Issue 要求解锁（右键打开反馈页面）" & vbCrLf & "· 向帮助库提交 Pull Request，在龙猫合并后解锁"
-        RadioLauncherTheme9.ToolTip = "· 反馈一个 Bug，在反馈标记为 [完成] 后回复 Issue 要求解锁" & vbCrLf & "· 向帮助库提交 Pull Request，在龙猫合并后解锁"
+        If Not RadioLauncherTheme9.IsEnabled Then LabLauncherTheme9Copy.ToolTip = "· 反馈一个 Bug，在标记为 [完成] 后回复识别码要求解锁（右键打开反馈页面）" & vbCrLf & "· 提交一个 Pull Request 或主页预设，在标记为 [完成] 后回复识别码要求解锁"
+        RadioLauncherTheme9.ToolTip = "· 反馈一个 Bug，在标记为 [完成] 后回复识别码要求解锁" & vbCrLf & "· 提交一个 Pull Request 或主页预设，在标记为 [完成] 后回复识别码要求解锁"
         '极客蓝的处理在 ThemeCheck 中
 
     End Sub
@@ -83,8 +84,12 @@
             MusicRefreshUI()
 
             '主页
-            ComboCustomPreset.SelectedIndex = Setup.Get("UiCustomPreset")
-            CType(FindName("RadioCustomType" & Setup.Load("UiCustomType")), MyRadioBox).Checked = True
+            Try
+                ComboCustomPreset.SelectedIndex = Setup.Get("UiCustomPreset")
+            Catch
+                Setup.Reset("UiCustomPreset")
+            End Try
+            CType(FindName("RadioCustomType" & Setup.Load("UiCustomType", ForceReload:=True)), MyRadioBox).Checked = True
             TextCustomNet.Text = Setup.Get("UiCustomNet")
 
             '功能隐藏
@@ -93,6 +98,7 @@
             CheckHiddenPageSetup.Checked = Setup.Get("UiHiddenPageSetup")
             CheckHiddenPageOther.Checked = Setup.Get("UiHiddenPageOther")
             CheckHiddenFunctionSelect.Checked = Setup.Get("UiHiddenFunctionSelect")
+            CheckHiddenFunctionModUpdate.Checked = Setup.Get("UiHiddenFunctionModUpdate")
             CheckHiddenFunctionHidden.Checked = Setup.Get("UiHiddenFunctionHidden")
             CheckHiddenSetupLaunch.Checked = Setup.Get("UiHiddenSetupLaunch")
             CheckHiddenSetupUI.Checked = Setup.Get("UiHiddenSetupUi")
@@ -143,6 +149,7 @@
             Setup.Reset("UiHiddenPageSetup")
             Setup.Reset("UiHiddenPageOther")
             Setup.Reset("UiHiddenFunctionSelect")
+            Setup.Reset("UiHiddenFunctionModUpdate")
             Setup.Reset("UiHiddenFunctionHidden")
             Setup.Reset("UiHiddenSetupLaunch")
             Setup.Reset("UiHiddenSetupUi")
@@ -170,7 +177,7 @@
     Private Shared Sub ComboChange(sender As MyComboBox, e As Object) Handles ComboBackgroundSuit.SelectionChanged, ComboCustomPreset.SelectionChanged
         If AniControlEnabled = 0 Then Setup.Set(sender.Tag, sender.SelectedIndex)
     End Sub
-    Private Shared Sub CheckBoxChange(sender As MyCheckBox, e As Object) Handles CheckMusicStop.Change, CheckMusicRandom.Change, CheckMusicAuto.Change, CheckBackgroundColorful.Change, CheckLogoLeft.Change, CheckLauncherLogo.Change, CheckHiddenFunctionHidden.Change, CheckHiddenFunctionSelect.Change, CheckHiddenPageDownload.Change, CheckHiddenPageLink.Change, CheckHiddenPageOther.Change, CheckHiddenPageSetup.Change, CheckHiddenSetupLaunch.Change, CheckHiddenSetupSystem.Change, CheckHiddenSetupLink.Change, CheckHiddenSetupUI.Change, CheckHiddenOtherAbout.Change, CheckHiddenOtherFeedback.Change, CheckHiddenOtherVote.Change, CheckHiddenOtherHelp.Change, CheckHiddenOtherTest.Change, CheckMusicStart.Change, CheckLauncherEmail.Change
+    Private Shared Sub CheckBoxChange(sender As MyCheckBox, e As Object) Handles CheckMusicStop.Change, CheckMusicRandom.Change, CheckMusicAuto.Change, CheckBackgroundColorful.Change, CheckLogoLeft.Change, CheckLauncherLogo.Change, CheckHiddenFunctionHidden.Change, CheckHiddenFunctionSelect.Change, CheckHiddenFunctionModUpdate.Change, CheckHiddenPageDownload.Change, CheckHiddenPageLink.Change, CheckHiddenPageOther.Change, CheckHiddenPageSetup.Change, CheckHiddenSetupLaunch.Change, CheckHiddenSetupSystem.Change, CheckHiddenSetupLink.Change, CheckHiddenSetupUI.Change, CheckHiddenOtherAbout.Change, CheckHiddenOtherFeedback.Change, CheckHiddenOtherVote.Change, CheckHiddenOtherHelp.Change, CheckHiddenOtherTest.Change, CheckMusicStart.Change, CheckLauncherEmail.Change
         If AniControlEnabled = 0 Then Setup.Set(sender.Tag, sender.Checked)
     End Sub
     Private Shared Sub TextBoxChange(sender As MyTextBox, e As Object) Handles TextLogoText.ValidatedTextChanged, TextCustomNet.ValidatedTextChanged
@@ -182,13 +189,13 @@
 
     '背景图片
     Private Sub BtnUIBgOpen_Click(sender As Object, e As EventArgs) Handles BtnBackgroundOpen.Click
-        OpenExplorer("""" & Path & "PCL\Pictures""")
+        OpenExplorer(Path & "PCL\Pictures\")
     End Sub
     Private Sub BtnBackgroundRefresh_Click(sender As Object, e As EventArgs) Handles BtnBackgroundRefresh.Click
         BackgroundRefresh(True, True)
     End Sub
     Public Sub BackgroundRefreshUI(Show As Boolean, Count As Integer)
-        If IsNothing(PanBackgroundOpacity) Then Exit Sub
+        If IsNothing(PanBackgroundOpacity) Then Return
         If Show Then
             PanBackgroundOpacity.Visibility = Visibility.Visible
             PanBackgroundBlur.Visibility = Visibility.Visible
@@ -265,17 +272,17 @@
         End Try
     End Sub
 
-
     '顶部栏
     Private Sub BtnLogoChange_Click(sender As Object, e As EventArgs) Handles BtnLogoChange.Click
-        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpg;*.gif)|*.png;*.jpg;*.gif", "选择图片")
-        If FileName = "" Then Exit Sub
+        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp", "选择图片")
+        If FileName = "" Then Return
         Try
             '拷贝文件
             File.Delete(Path & "PCL\Logo.png")
             CopyFile(FileName, Path & "PCL\Logo.png")
             '设置当前显示
-            FrmMain.ImageTitleLogo.Source = New MyBitmap(Path & "PCL\Logo.png")
+            FrmMain.ImageTitleLogo.Source = Nothing '防止因为 Source 属性前后的值相同而不更新 (#5628)
+            FrmMain.ImageTitleLogo.Source = Path & "PCL\Logo.png"
         Catch ex As Exception
             If ex.Message.Contains("参数无效") Then
                 Log("改变标题栏图片失败，该图片文件可能并非标准格式。" & vbCrLf &
@@ -287,12 +294,13 @@
         End Try
     End Sub
     Private Sub RadioLogoType3_Check(sender As Object, e As RouteEventArgs) Handles RadioLogoType3.PreviewCheck
-        If Not (AniControlEnabled = 0 AndAlso e.RaiseByMouse) Then Exit Sub
+        If Not (AniControlEnabled = 0 AndAlso e.RaiseByMouse) Then Return
 Refresh:
         '已有图片则不再选择
         If File.Exists(Path & "PCL\Logo.png") Then
             Try
-                FrmMain.ImageTitleLogo.Source = New MyBitmap(Path & "PCL\Logo.png")
+                FrmMain.ImageTitleLogo.Source = Nothing '防止因为 Source 属性前后的值相同而不更新 (#5628)
+                FrmMain.ImageTitleLogo.Source = Path & "PCL\Logo.png"
             Catch ex As Exception
                 If ex.Message.Contains("参数无效") Then
                     Log("调整标题栏图片失败，该图片文件可能并非标准格式。" & vbCrLf &
@@ -308,10 +316,10 @@ Refresh:
                     Log(exx, "清理错误的标题栏图片失败", LogLevel.Msgbox)
                 End Try
             End Try
-            Exit Sub
+            Return
         End If
         '没有图片则要求选择
-        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpg;*.gif)|*.png;*.jpg;*.gif", "选择图片")
+        Dim FileName As String = SelectFile("常用图片文件(*.png;*.jpeg;*.jpg;*.gif;*.webp)|*.png;*.jpeg;*.jpg;*.gif;*.webp", "选择图片")
         If FileName = "" Then
             FrmMain.ImageTitleLogo.Source = Nothing
             e.Handled = True
@@ -329,7 +337,7 @@ Refresh:
     Private Sub BtnLogoDelete_Click(sender As Object, e As EventArgs) Handles BtnLogoDelete.Click
         Try
             File.Delete(Path & "PCL\Logo.png")
-            RadioLogoType1.SetChecked(True, True, True)
+            RadioLogoType1.SetChecked(True, True)
             Hint("标题栏图片已清空！", HintType.Finish)
         Catch ex As Exception
             Log(ex, "清空标题栏图片失败", LogLevel.Msgbox)
@@ -338,18 +346,20 @@ Refresh:
 
     '背景音乐
     Private Sub BtnMusicOpen_Click(sender As Object, e As EventArgs) Handles BtnMusicOpen.Click
-        OpenExplorer("""" & Path & "PCL\Musics""")
+        OpenExplorer(Path & "PCL\Musics\")
     End Sub
     Private Sub BtnMusicRefresh_Click(sender As Object, e As EventArgs) Handles BtnMusicRefresh.Click
         MusicRefreshPlay(True)
     End Sub
     Public Sub MusicRefreshUI()
-        If PanBackgroundOpacity Is Nothing Then Exit Sub
+        If PanBackgroundOpacity Is Nothing Then Return
         If MusicAllList.Any Then
             PanMusicVolume.Visibility = Visibility.Visible
             PanMusicDetail.Visibility = Visibility.Visible
             BtnMusicClear.Visibility = Visibility.Visible
-            CardMusic.Title = "背景音乐（" & EnumerateFiles(Path & "PCL\Musics\").Count & " 首）"
+            CardMusic.Title = "背景音乐（" &
+                EnumerateFiles(Path & "PCL\Musics\").Count(Function(f) Not {".ini", ".jpg", ".txt", ".cfg", ".lrc", ".db", ".png"}.Contains(f.Extension.ToLower)) &
+                " 首）"
         Else
             PanMusicVolume.Visibility = Visibility.Collapsed
             PanMusicDetail.Visibility = Visibility.Collapsed
@@ -360,35 +370,36 @@ Refresh:
     End Sub
     Private Sub BtnMusicClear_Click(sender As Object, e As EventArgs) Handles BtnMusicClear.Click
         If MyMsgBox("即将删除背景音乐文件夹中的所有文件。" & vbCrLf & "此操作不可撤销，是否确定？", "警告",, "取消", IsWarn:=True) = 1 Then
-            RunInThread(Sub()
-                            Hint("正在删除背景音乐……")
-                            '停止播放音乐
-                            MusicNAudio = Nothing
-                            MusicWaitingList = New List(Of String)
-                            MusicAllList = New List(Of String)
-                            Thread.Sleep(200)
-                            '删除文件
-                            Try
-                                DeleteDirectory(Path & "PCL\Musics")
-                                Hint("背景音乐已删除！", HintType.Finish)
-                            Catch ex As Exception
-                                Log(ex, "删除背景音乐失败", LogLevel.Msgbox)
-                            End Try
-                            Try
-                                Directory.CreateDirectory(Path & "PCL\Musics")
-                                RunInUi(Sub() MusicRefreshPlay(False))
-                            Catch ex As Exception
-                                Log(ex, "重建背景音乐文件夹失败", LogLevel.Msgbox)
-                            End Try
-                        End Sub)
+            RunInThread(
+            Sub()
+                Hint("正在删除背景音乐……")
+                '停止播放音乐
+                MusicNAudio = Nothing
+                MusicWaitingList = New List(Of String)
+                MusicAllList = New List(Of String)
+                Thread.Sleep(200)
+                '删除文件
+                Try
+                    DeleteDirectory(Path & "PCL\Musics")
+                    Hint("背景音乐已删除！", HintType.Finish)
+                Catch ex As Exception
+                    Log(ex, "删除背景音乐失败", LogLevel.Msgbox)
+                End Try
+                Try
+                    Directory.CreateDirectory(Path & "PCL\Musics")
+                    RunInUi(Sub() MusicRefreshPlay(False))
+                Catch ex As Exception
+                    Log(ex, "重建背景音乐文件夹失败", LogLevel.Msgbox)
+                End Try
+            End Sub)
         End If
     End Sub
     Private Sub CheckMusicStart_Change() Handles CheckMusicStart.Change
-        If AniControlEnabled <> 0 Then Exit Sub
+        If AniControlEnabled <> 0 Then Return
         If CheckMusicStart.Checked Then CheckMusicStop.Checked = False
     End Sub
     Private Sub CheckMusicStop_Change() Handles CheckMusicStop.Change
-        If AniControlEnabled <> 0 Then Exit Sub
+        If AniControlEnabled <> 0 Then Return
         If CheckMusicStop.Checked Then CheckMusicStart.Checked = False
     End Sub
 
@@ -396,11 +407,11 @@ Refresh:
     Private Sub BtnCustomFile_Click(sender As Object, e As EventArgs) Handles BtnCustomFile.Click
         Try
             If File.Exists(Path & "PCL\Custom.xaml") Then
-                If MyMsgBox("当前已存在布局文件，继续生成教学文件将会覆盖现有布局文件！", "覆盖确认", "继续", "取消", IsWarn:=True) = 2 Then Exit Sub
+                If MyMsgBox("当前已存在布局文件，继续生成教学文件将会覆盖现有布局文件！", "覆盖确认", "继续", "取消", IsWarn:=True) = 2 Then Return
             End If
             WriteFile(Path & "PCL\Custom.xaml", GetResources("Custom"))
             Hint("教学文件已生成！", HintType.Finish)
-            OpenExplorer("/select,""" & Path & "PCL\Custom.xaml""")
+            OpenExplorer(Path & "PCL\Custom.xaml")
         Catch ex As Exception
             Log(ex, "生成教学文件失败", LogLevel.Feedback)
         End Try
@@ -415,7 +426,7 @@ Refresh:
                  "3. 点击 刷新主页 按钮，查看主页现在长啥样了。" & vbCrLf &
                  vbCrLf &
                  "你可以在生成教学文件后直接刷新主页，对照着进行修改，更有助于理解。" & vbCrLf &
-                 "直接将自定义主页文件拖进 PCL 窗口也可以快捷加载。", "主页自定义教程")
+                 "直接将主页文件拖进 PCL 窗口也可以快捷加载。", "主页自定义教程")
     End Sub
 
     '主题
@@ -423,9 +434,9 @@ Refresh:
         RadioLauncherTheme5Gray.Opacity -= 0.23
         RadioLauncherTheme5.Opacity += 0.23
         AniStart({
-                     AaOpacity(RadioLauncherTheme5Gray, 1, 1000),
-                     AaOpacity(RadioLauncherTheme5, -1, 1000)
-                 }, "ThemeUnlock")
+            AaOpacity(RadioLauncherTheme5Gray, 1, 1000 * AniSpeed),
+            AaOpacity(RadioLauncherTheme5, -1, 1000 * AniSpeed)
+        }, "ThemeUnlock")
         If RadioLauncherTheme5Gray.Opacity < 0.08 Then
             ThemeUnlock(5, UnlockHint:="隐藏主题 玄素黑 已解锁！")
             AniStop("ThemeUnlock")
@@ -433,7 +444,7 @@ Refresh:
         End If
     End Sub
     Private Sub LabLauncherTheme11Click_MouseLeftButtonUp() Handles LabLauncherTheme11Click.MouseLeftButtonUp, RadioLauncherTheme11.MouseRightButtonUp
-        If LabLauncherTheme11Click.Visibility = Visibility.Collapsed OrElse LabLauncherTheme11Click.ToolTip.ToString.Contains("点击") Then
+        If LabLauncherTheme11Click.Visibility = Visibility.Collapsed OrElse If(LabLauncherTheme11Click.ToolTip, "").ToString.Contains("点击") Then
             If MyMsgBox(
                 "1. 不爬取或攻击相关服务或网站，不盗取相关账号，没有谜题可以或需要以此来解决。" & vbCrLf &
                 "2. 不得篡改或损毁相关公开信息，请尽量让它们保持原状。" & vbCrLf &
@@ -445,17 +456,17 @@ Refresh:
             End If
         End If
     End Sub
-    Private Sub LabLauncherTheme8Copy_MouseRightButtonUp() Handles LabLauncherTheme8Copy.MouseRightButtonUp
-        OpenWebsite("https://afdian.net/a/LTCat")
+    Private Sub LabLauncherTheme8Copy_MouseRightButtonUp() Handles LabLauncherTheme8Copy.MouseRightButtonUp, RadioLauncherTheme8.MouseRightButtonUp
+        OpenWebsite("https://afdian.com/a/LTCat")
     End Sub
-    Private Sub LabLauncherTheme9Copy_MouseRightButtonUp() Handles LabLauncherTheme9Copy.MouseRightButtonUp
+    Private Sub LabLauncherTheme9Copy_MouseRightButtonUp() Handles LabLauncherTheme9Copy.MouseRightButtonUp, RadioLauncherTheme9.MouseRightButtonUp
         PageOtherLeft.TryFeedback()
     End Sub
 
     '主题自定义
     Private Sub RadioLauncherTheme14_Change(sender As Object, e As RouteEventArgs) Handles RadioLauncherTheme14.Changed
         If RadioLauncherTheme14.Checked Then
-            If LabLauncherHue.Visibility = Visibility.Visible Then Exit Sub
+            If LabLauncherHue.Visibility = Visibility.Visible Then Return
             LabLauncherHue.Visibility = Visibility.Visible
             SliderLauncherHue.Visibility = Visibility.Visible
             LabLauncherSat.Visibility = Visibility.Visible
@@ -465,7 +476,7 @@ Refresh:
             LabLauncherLight.Visibility = Visibility.Visible
             SliderLauncherLight.Visibility = Visibility.Visible
         Else
-            If LabLauncherHue.Visibility = Visibility.Collapsed Then Exit Sub
+            If LabLauncherHue.Visibility = Visibility.Collapsed Then Return
             LabLauncherHue.Visibility = Visibility.Collapsed
             SliderLauncherHue.Visibility = Visibility.Collapsed
             LabLauncherSat.Visibility = Visibility.Collapsed
@@ -478,7 +489,7 @@ Refresh:
         CardLauncher.TriggerForceResize()
     End Sub
     Private Sub HSL_Change() Handles SliderLauncherHue.Change, SliderLauncherLight.Change, SliderLauncherSat.Change, SliderLauncherDelta.Change
-        If AniControlEnabled <> 0 OrElse SliderLauncherSat Is Nothing OrElse Not SliderLauncherSat.IsLoaded Then Exit Sub
+        If AniControlEnabled <> 0 OrElse SliderLauncherSat Is Nothing OrElse Not SliderLauncherSat.IsLoaded Then Return
         ThemeRefresh()
     End Sub
 
@@ -502,7 +513,7 @@ Refresh:
     ''' 更新功能隐藏带来的显示变化。
     ''' </summary>
     Public Shared Sub HiddenRefresh() Handles Me.Loaded
-        If FrmMain.PanTitleSelect Is Nothing OrElse Not FrmMain.PanTitleSelect.IsLoaded Then Exit Sub
+        If FrmMain.PanTitleSelect Is Nothing OrElse Not FrmMain.PanTitleSelect.IsLoaded Then Return
         Try
             '顶部栏
             If Not HiddenForceShow AndAlso Setup.Get("UiHiddenPageDownload") AndAlso Setup.Get("UiHiddenPageLink") AndAlso Setup.Get("UiHiddenPageSetup") AndAlso Setup.Get("UiHiddenPageOther") Then
@@ -633,7 +644,7 @@ Refresh:
             CheckHiddenPageOther.Checked = False
         End If
         '修改无具体内容的项
-        If Not user Then Exit Sub
+        If Not user Then Return
         If Setup.Get("UiHiddenOtherHelp") AndAlso Setup.Get("UiHiddenOtherAbout") AndAlso Setup.Get("UiHiddenOtherTest") Then
             CheckHiddenOtherFeedback.Checked = True
             CheckHiddenOtherVote.Checked = True
@@ -641,7 +652,7 @@ Refresh:
     End Sub
     Private Sub HiddenOtherNet(sender As Object, user As Boolean) Handles CheckHiddenOtherFeedback.Change, CheckHiddenOtherVote.Change
         '更多子页面（无具体内容的）
-        If Not user Then Exit Sub
+        If Not user Then Return
         If Setup.Get("UiHiddenOtherHelp") AndAlso Setup.Get("UiHiddenOtherAbout") AndAlso Setup.Get("UiHiddenOtherTest") AndAlso
             (Not Setup.Get("UiHiddenOtherFeedback") OrElse Not Setup.Get("UiHiddenOtherVote")) Then
             CheckHiddenOtherAbout.Checked = False
@@ -657,49 +668,39 @@ Refresh:
 
 #End Region
 
-    '公开预览版
+    '赞助
     Private Sub BtnLauncherDonate_Click(sender As Object, e As EventArgs) Handles BtnLauncherDonate.Click
-        OpenWebsite("https://afdian.net/a/LTCat")
+        OpenWebsite("https://afdian.com/a/LTCat")
     End Sub
 
     '滑动条
     Private Sub SliderLoad()
-        SliderMusicVolume.GetHintText = Function(Value As Integer)
-                                            Return Math.Ceiling(Value * 0.1) & "%"
-                                        End Function
-        SliderLauncherOpacity.GetHintText = Function(Value As Integer)
-                                                Return Math.Round(40 + Value * 0.1) & "%"
-                                            End Function
-        SliderLauncherHue.GetHintText = Function(Value As Integer)
-                                            Return Value & "°"
-                                        End Function
-        SliderLauncherSat.GetHintText = Function(Value As Integer)
-                                            Return Value & "%"
-                                        End Function
-        SliderLauncherDelta.GetHintText = Function(Value As Integer)
-                                              If Value > 90 Then
-                                                  Return "+" & (Value - 90)
-                                              ElseIf Value = 90 Then
-                                                  Return 0
-                                              Else
-                                                  Return Value - 90
-                                              End If
-                                          End Function
-        SliderLauncherLight.GetHintText = Function(Value As Integer)
-                                              If Value > 20 Then
-                                                  Return "+" & (Value - 20)
-                                              ElseIf Value = 20 Then
-                                                  Return 0
-                                              Else
-                                                  Return Value - 20
-                                              End If
-                                          End Function
-        SliderBackgroundOpacity.GetHintText = Function(Value As Integer)
-                                                  Return Math.Round(Value * 0.1) & "%"
-                                              End Function
-        SliderBackgroundBlur.GetHintText = Function(Value As Integer)
-                                               Return Value & " 像素"
-                                           End Function
+        SliderMusicVolume.GetHintText = Function(v) Math.Ceiling(v * 0.1) & "%"
+        SliderLauncherOpacity.GetHintText = Function(v) Math.Round(40 + v * 0.1) & "%"
+        SliderLauncherHue.GetHintText = Function(v) v & "°"
+        SliderLauncherSat.GetHintText = Function(v) v & "%"
+        SliderLauncherDelta.GetHintText =
+        Function(Value As Integer)
+            If Value > 90 Then
+                Return "+" & (Value - 90)
+            ElseIf Value = 90 Then
+                Return 0
+            Else
+                Return Value - 90
+            End If
+        End Function
+        SliderLauncherLight.GetHintText =
+        Function(Value As Integer)
+            If Value > 20 Then
+                Return "+" & (Value - 20)
+            ElseIf Value = 20 Then
+                Return 0
+            Else
+                Return Value - 20
+            End If
+        End Function
+        SliderBackgroundOpacity.GetHintText = Function(v) Math.Round(v * 0.1) & "%"
+        SliderBackgroundBlur.GetHintText = Function(v) v & " 像素"
     End Sub
 
 End Class

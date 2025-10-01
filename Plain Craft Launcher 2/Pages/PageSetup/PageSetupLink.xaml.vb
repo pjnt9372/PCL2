@@ -8,7 +8,7 @@
         PanBack.ScrollToHome()
 
         '非重复加载部分
-        If IsLoaded Then Exit Sub
+        If IsLoaded Then Return
         IsLoaded = True
 
         AniControlEnabled += 1
@@ -45,11 +45,6 @@
     End Sub
 
     Private Sub BtnHiperLog_Click(sender As Object, e As EventArgs) Handles BtnHiperLog.Click
-        If File.Exists(PageLinkHiper.PathHiper & "logs\hiper.log") Then
-            OpenExplorer("/select,""" & PageLinkHiper.PathHiper & "logs\hiper.log""")
-        Else
-            Hint("没有找到 HiPer 联机模块的日志！")
-        End If
     End Sub
 
 End Class

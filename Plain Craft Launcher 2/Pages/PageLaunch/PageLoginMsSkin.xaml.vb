@@ -12,7 +12,7 @@
     ''' 刷新页面显示的所有信息。
     ''' </summary>
     Public Sub Reload(KeepInput As Boolean)
-        TextName.Text = Setup.Get("CacheMsName")
+        TextName.Text = Setup.Get("CacheMsV2Name")
         '皮肤在 Loaded 加载
     End Sub
     ''' <summary>
@@ -20,9 +20,9 @@
     ''' </summary>
     Public Shared Function GetLoginData() As McLoginMs
         If McLoginMsLoader.State = LoadState.Finished Then
-            Return New McLoginMs With {.OAuthRefreshToken = Setup.Get("CacheMsOAuthRefresh"), .UserName = Setup.Get("CacheMsName"), .AccessToken = Setup.Get("CacheMsAccess"), .Uuid = Setup.Get("CacheMsUuid"), .ProfileJson = Setup.Get("CacheMsProfileJson")}
+            Return New McLoginMs With {.OAuthRefreshToken = Setup.Get("CacheMsV2OAuthRefresh"), .UserName = Setup.Get("CacheMsV2Name"), .AccessToken = Setup.Get("CacheMsV2Access"), .Uuid = Setup.Get("CacheMsV2Uuid"), .ProfileJson = Setup.Get("CacheMsV2ProfileJson")}
         Else
-            Return New McLoginMs With {.OAuthRefreshToken = Setup.Get("CacheMsOAuthRefresh"), .UserName = Setup.Get("CacheMsName")}
+            Return New McLoginMs With {.OAuthRefreshToken = Setup.Get("CacheMsV2OAuthRefresh"), .UserName = Setup.Get("CacheMsV2Name")}
         End If
     End Function
 
@@ -33,7 +33,7 @@
         AniStart(AaOpacity(PanButtons, 1 - PanButtons.Opacity, 120), "PageLoginMsSkin Button")
     End Sub
     Public Sub HidePanel() Handles PanData.MouseLeave
-        If BtnEdit.ContextMenu.IsOpen OrElse BtnSkin.ContextMenu.IsOpen OrElse PanData.IsMouseOver Then Exit Sub
+        If BtnEdit.ContextMenu.IsOpen OrElse BtnSkin.ContextMenu.IsOpen OrElse PanData.IsMouseOver Then Return
         AniStart(AaOpacity(PanButtons, -PanButtons.Opacity, 120), "PageLoginMsSkin Button")
     End Sub
 
@@ -50,11 +50,11 @@
 
     '退出登录
     Private Sub BtnExit_Click() Handles BtnExit.Click
-        Setup.Set("CacheMsOAuthRefresh", "")
-        Setup.Set("CacheMsAccess", "")
-        Setup.Set("CacheMsProfileJson", "")
-        Setup.Set("CacheMsUuid", "")
-        Setup.Set("CacheMsName", "")
+        Setup.Set("CacheMsV2OAuthRefresh", "")
+        Setup.Set("CacheMsV2Access", "")
+        Setup.Set("CacheMsV2ProfileJson", "")
+        Setup.Set("CacheMsV2Uuid", "")
+        Setup.Set("CacheMsV2Name", "")
         McLoginMsLoader.Abort()
         FrmLaunchLeft.RefreshPage(False, True)
     End Sub
@@ -74,55 +74,55 @@
         '检查条件，获取新皮肤
         If IsChanging Then
             Hint("正在更改皮肤中，请稍候！")
-            Exit Sub
+            Return
         End If
         If McLoginLoader.State = LoadState.Failed Then
             Hint("登录失败，无法更改皮肤！", HintType.Critical)
-            Exit Sub
+            Return
         End If
         Dim SkinInfo As McSkinInfo = McSkinSelect()
-        If Not SkinInfo.IsVaild Then Exit Sub
+        If Not SkinInfo.IsVaild Then Return
         Hint("正在更改皮肤……")
         IsChanging = True
         '开始实际获取
         RunInNewThread(
-        Async Sub()
+        Sub()
             Try
 Retry:
-                If McLoginMsLoader.State = LoadState.Loading Then McLoginMsLoader.WaitForExit() '等待登录结束
-                Dim AccessToken As String = Setup.Get("CacheMsAccess")
-                Dim Uuid As String = Setup.Get("CacheMsUuid")
-
-                Dim Client As New Net.Http.HttpClient With {.Timeout = New TimeSpan(0, 0, 30)}
-                Client.DefaultRequestHeaders.Authorization = New Net.Http.Headers.AuthenticationHeaderValue("Bearer", AccessToken)
-                Client.DefaultRequestHeaders.Accept.Add(New Net.Http.Headers.MediaTypeWithQualityHeaderValue("*/*"))
-                Client.DefaultRequestHeaders.UserAgent.Add(New Net.Http.Headers.ProductInfoHeaderValue("MojangSharp", "0.1"))
-                Dim Contents As New Net.Http.MultipartFormDataContent From {
-                    {New Net.Http.StringContent(If(SkinInfo.IsSlim, "slim", "classic")), "variant"},
-                    {New Net.Http.ByteArrayContent(File.ReadAllBytes(SkinInfo.LocalFile)), "file", GetFileNameFromPath(SkinInfo.LocalFile)}
-                }
-                Dim Result As String = Await (Await Client.PostAsync(New Uri("https://api.minecraftservices.com/minecraft/profile/skins"), Contents)).Content.ReadAsStringAsync
+                Do While McLoginMsLoader.State = LoadState.Loading '等待登录结束
+                    Thread.Sleep(10)
+                Loop
+                If McLoginMsLoader.State = LoadState.Failed Then Throw New Exception("登录失败", McLoginMsLoader.Error)
+                Dim AccessToken As String = Setup.Get("CacheMsV2Access")
+                Dim Uuid As String = Setup.Get("CacheMsV2Uuid")
+                Dim Result As String = NetRequestByClientRetry("https://api.minecraftservices.com/minecraft/profile/skins", HttpMethod.Post,
+                    Content:=New Net.Http.MultipartFormDataContent From {
+                        {New Net.Http.StringContent(If(SkinInfo.IsSlim, "slim", "classic")), "variant"},
+                        {New Net.Http.ByteArrayContent(ReadFileBytes(SkinInfo.LocalFile)), "file", GetFileNameFromPath(SkinInfo.LocalFile)}
+                    },
+                    Headers:={{"Authorization", "Bearer " & AccessToken}, {"Accept", "*/*"}, {"User-Agent", "MojangSharp/0.1"}})
                 If Result.Contains("request requires user authentication") Then
                     Hint("正在登录，将在登录完成后继续更改皮肤……")
                     McLoginMsLoader.Start(GetLoginData(), IsForceRestart:=True)
                     GoTo Retry
                 ElseIf Result.Contains("""error""") Then
-                    Hint("更改皮肤失败：" & GetJson(Result)("error"), HintType.Critical)
-                    Exit Sub
+                    Hint("更改皮肤失败：" & GetJson(Result)("error").ToString, HintType.Critical)
+                    Return
                 End If
                 '获取新皮肤地址
                 Log("[Skin] 皮肤修改返回值：" & vbCrLf & Result)
                 Dim ResultJson As JObject = GetJson(Result)
+                If ResultJson.ContainsKey("errorMessage") Then Throw New Exception(ResultJson("errorMessage").ToString) '#5309
                 For Each Skin As JObject In ResultJson("skins")
                     If Skin("state").ToString = "ACTIVE" Then
                         MySkin.ReloadCache(Skin("url"))
-                        Exit Sub
+                        Return
                     End If
                 Next
                 Throw New Exception("未知错误（" & Result & "）")
             Catch ex As Exception
-                If ex.GetType.Equals(GetType(Tasks.TaskCanceledException)) Then
-                    Hint("更改皮肤失败：与 Mojang 皮肤服务器的连接超时，请检查你的网络是否通畅！", HintType.Critical)
+                If TypeOf ex Is OperationCanceledException Then
+                    Hint("更改皮肤失败：连接皮肤服务器超时，请稍后再试，或使用 VPN 改善网络环境", HintType.Critical)
                 Else
                     Log(ex, "更改皮肤失败", LogLevel.Hint)
                 End If

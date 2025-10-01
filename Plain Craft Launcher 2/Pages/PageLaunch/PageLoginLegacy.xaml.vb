@@ -26,7 +26,7 @@ Public Class PageLoginLegacy
                 ComboName.ItemsSource = Nothing
             Else
                 ComboName.ItemsSource = Setup.Get("LoginLegacyName").ToString.Split("¨")
-                ComboName.Text = Setup.Get("LoginLegacyName").ToString.Before("¨").Trim
+                ComboName.Text = Setup.Get("LoginLegacyName").ToString.BeforeFirst("¨").Trim
             End If
         End If
         IsReloaded = True
@@ -44,6 +44,11 @@ Public Class PageLoginLegacy
     Public Shared Function IsVaild(LoginData As McLoginLegacy) As String
         If LoginData.UserName.Trim = "" Then Return "玩家名不能为空！"
         If LoginData.UserName.Contains("""") Then Return "玩家名不能包含英文引号！"
+        If McVersionCurrent IsNot Nothing AndAlso
+           (McVersionCurrent.Version.IsStandardVersion AndAlso McVersionCurrent.Version.McVersion >= New Version(1, 20, 3)) AndAlso
+           LoginData.UserName.Trim.Length > 16 Then
+            Return "自 1.20.3 起，玩家名至多只能包含 16 个字符！"
+        End If
         Return ""
     End Function
     Public Function IsVaild() As String
@@ -59,6 +64,7 @@ Public Class PageLoginLegacy
     Private Sub ComboLegacy_TextChanged(sender As Object, e As TextChangedEventArgs) Handles ComboName.TextChanged
         If Setup.Get("LaunchSkinType") = 0 Then PageLaunchLeft.SkinLegacy.Start(IsForceRestart:=True)
         HintChinese.Visibility = If(RegexCheck(ComboName.Text, "^[0-9A-Za-z_]*$"), Visibility.Collapsed, Visibility.Visible)
+        RunInUi(Sub() PanMain.InvalidateMeasure(), True) '由于 WPF 的 Bug，它不一定会自动更新 HintChinese 的大小（#6627）
     End Sub
     Private Sub Skin_Click() Handles Skin.Click
         If (Setup.Get("UiHiddenPageSetup") OrElse Setup.Get("UiHiddenSetupLaunch")) AndAlso Not PageSetupUI.HiddenForceShow Then
